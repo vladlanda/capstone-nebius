@@ -5,10 +5,7 @@ from sklearn.model_selection import train_test_split
 import logging
 import os
 
-RANDOM_SEED = 42
-
-def set_seed():
-    np.random.seed(RANDOM_SEED)
+from app.utils import set_seed,RANDOM_SEED
 
 def preprocess_and_split(filepath: str,data_folder='data',split_ratio=0.3):
     df = pd.read_csv(filepath)
