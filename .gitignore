@@ -8,7 +8,6 @@ wandb/
 *.egg-info
 models/
 archived_experiments/
-# data/
-tests/
+data/
 # Virtual environments
 .venv

@@ -3,22 +3,25 @@ import pandas as pd
 import numpy as np
 import ast
 from sklearn.preprocessing import MultiLabelBinarizer
+from sklearn.model_selection import train_test_split
+from config import config
 
-raw_data_path = './data/'
 
-def preprocess(csv_path=raw_data_path, 
+def preprocess(raw_data_path=config.RAW_DATA_PATH, 
                drop_duplicate_rows=True,
                handle_column_types=True,
                handle_missing_values=True,
                handle_outliers=True,
-               version_name=None
-               ):
+               version_name=config.VERSION_NAME,
+               split_ratio=config.TEST_SIZE,
+               seed=config.RANDOM_SEED,
+               processed_data_path=config.PROCESSED_DATA_PATH):
     # IMPORT RAW DATA
     try:
-        la = pd.read_csv(f'{csv_path}airbnb_la_raw.csv')
-        ny = pd.read_csv(f'{csv_path}airbnb_ny_raw.csv')
+        la = pd.read_csv(f'{raw_data_path}airbnb_la_raw.csv')
+        ny = pd.read_csv(f'{raw_data_path}airbnb_ny_raw.csv')
     except FileNotFoundError as e:
-        print(f"Error: Could not find input files in {csv_path}")
+        print(f"Error: Could not find input files in {raw_data_path}")
         raise
 
     # CONCAT AND ADD THE CITY COLUMN
@@ -75,11 +78,20 @@ def preprocess(csv_path=raw_data_path,
         date_cols = ['last_scraped', 'host_since', 'first_review', 'last_review']
         for col in date_cols:
             airbnb[col] = pd.to_datetime(airbnb[col])
+        
+        # Extract numeric features from dates
+        reference_date = pd.to_datetime('2024-01-01')
+        
+        for col in date_cols:
+            # Days since reference date
+            airbnb[f'{col}_days_since'] = (airbnb[col] - reference_date).dt.days
+            # Drop original date column
+            airbnb = airbnb.drop(col, axis=1)
 
         # BOOLEAN COLUMNS
         bool_cols = ['host_is_superhost', 'host_has_profile_pic', 'instant_bookable']
         for col in bool_cols:
-            airbnb[col] = airbnb[col].replace({'t': 1, 'f': 0})
+            airbnb[col] = airbnb[col].map({'t':True , 'f': False}).astype(float)
 
         # ORDINAL COLUMNS
         ordinal_cols = ['host_response_time']
@@ -183,7 +195,7 @@ def preprocess(csv_path=raw_data_path,
 
         # 2. One-hot encode all three columns
         categorical_cols = ['property_type', 'room_type', 'city']
-        airbnb = pd.get_dummies(airbnb, columns=categorical_cols, drop_first=True, sparse=True, dtype=int)
+        airbnb = pd.get_dummies(airbnb, columns=categorical_cols, drop_first=True, sparse=False, dtype=int)
 
 
     # # OUTLIERS
@@ -192,18 +204,60 @@ def preprocess(csv_path=raw_data_path,
         for col in nights_cols:
             airbnb.loc[airbnb[col]>365,col] = np.nan
 
-    airbnb.to_csv(f'{csv_path}airbnb_preprocessed_{version_name}.csv', index=False)
-    print(f"Final shape: {airbnb.shape}")
-    print(f"Saved to: {csv_path}airbnb_preprocessed_{version_name}.csv")
+    # # Keep only  numeric fields
+    airbnb = airbnb.select_dtypes(include=[np.number])
 
+    # # Fill NaN
+    airbnb = airbnb.fillna(0)
+
+    # # SPLIT
+    X = airbnb.drop(['review_scores_rating', 'id'], axis=1)
+    y = airbnb['review_scores_rating']
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=split_ratio, random_state=seed
+    )
+
+    print(f"Train size: {len(X_train)}, Test size: {len(X_test)}")
+
+    # Save split data
+    datasets = {
+        'X_train': X_train,
+        'X_test': X_test,
+        'y_train': y_train,
+        'y_test': y_test
+    }
+
+    for name, data in datasets.items():
+        filepath = f'{processed_data_path}{version_name}_{name}.csv'
+        data.to_csv(filepath, index=False)
+    print(f"Saved split data to {processed_data_path}")
+
+    # Also save full processed data
+    full_filepath = f'{processed_data_path}{version_name}_processed.csv'
+    airbnb.to_csv(full_filepath, index=False)
+    print(f"Saved full processed data: {airbnb.shape} to {full_filepath}")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--csv-path", type=str, default=raw_data_path)
-    parser.add_argument("--version-name", type=str, default='test')
+    parser.add_argument("--raw-data-path", type=str, default=config.RAW_DATA_PATH)
+    parser.add_argument("--drop-duplicate-rows", type=bool, default=True)
+    parser.add_argument("--handle-column-types", type=bool, default=True)
+    parser.add_argument("--handle-missing-values", type=bool, default=True)
+    parser.add_argument("--handle-outliers", type=bool, default=True)
+    parser.add_argument("--version-name", type=str, default=config.VERSION_NAME)
+    parser.add_argument("--split-ratio", type=float, default=config.TEST_SIZE)
+    parser.add_argument("--seed", type=int, default=config.RANDOM_SEED)
+    parser.add_argument("--processed_data_path", type=str, default=config.PROCESSED_DATA_PATH)
 
     args = parser.parse_args()
-    preprocess(
-        csv_path=args.csv_path,
-        version_name=args.version_name
-    )
+    preprocess(raw_data_path=args.raw_data_path,
+                drop_duplicate_rows=args.drop_duplicate_rows, 
+                handle_column_types=args.handle_column_types, 
+                handle_missing_values=args.handle_missing_values, 
+                handle_outliers=args.handle_outliers, 
+                version_name=args.version_name,
+                split_ratio=args.split_ratio,
+                seed=args.seed,
+                processed_data_path=args.processed_data_path
+                )
