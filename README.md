@@ -1,6 +1,6 @@
-# 🏡 Airbnb Price Prediction — Data Science Capstone (NEBIUS)
+# 🏡 Airbnb Rating Prediction — Data Science Capstone (NEBIUS)
 
-This repository contains my **Data Science Capstone Project** for the **NEBIUS Data Science Course**, built around the **Airbnb dataset**.  
+This repository contains **Data Science Capstone Project** for the **NEBIUS Data Science Course**, built around the **Airbnb dataset**.  
 The project focuses on **Exploratory Data Analysis (EDA)** and **building a model to predict listing scores **, following **Python data science best practices**.
 
 ---
