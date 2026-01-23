@@ -43,3 +43,7 @@ The project focuses on **Exploratory Data Analysis (EDA)** and **building a mode
 - uv pip install -r requirements.txt
 
 ---
+
+## Change log
+
+- wandb added (test in main.py)
