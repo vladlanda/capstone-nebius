@@ -3,11 +3,10 @@ import pandas as pd
 import numpy as np
 import joblib
 from pathlib import Path
-from sklearn.preprocessing import StandardScaler
-from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
 import wandb
 from config import config
+from utils import get_model, get_scaler
 
 ## TODO hyperparameters: batch_size, learning_rate, epochs.
 config.BATCH_SIZE
@@ -34,14 +33,16 @@ def train(version_name=config.VERSION_NAME,
     X_train, X_test, y_train, y_test = get_data()
 
     print(f"Training with version: {version_name}")
+    print(f"Model: {config.MODEL_TYPE}, Scaler: {config.SCALER_TYPE}")
 
     # Initialize wandb
     wandb.login()
     run = wandb.init(
         project="capstone",
-        name=f"{version_name}_linear_regression",
+        name=f"{version_name}_{config.MODEL_TYPE.lower()}",
         config={
-            "model": "linear regression (sklearn)",
+            "model": config.MODEL_TYPE,
+            "scaler": config.SCALER_TYPE,
             "version": version_name,
             "batch_size": batch_size,
             "learning_rate": learning_rate,
@@ -50,13 +51,20 @@ def train(version_name=config.VERSION_NAME,
     )
 
     # Scale features
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
+    scaler_class = get_scaler(config.SCALER_TYPE)
+    if scaler_class is not None:
+        scaler = scaler_class()
+        X_train_scaled = scaler.fit_transform(X_train)
+        X_test_scaled = scaler.transform(X_test)
+    else:
+        scaler = None
+        X_train_scaled = X_train.values
+        X_test_scaled = X_test.values
 
     # Train model
     print("Training model...")
-    model = LinearRegression()
+    model_class = get_model(config.MODEL_TYPE)
+    model = model_class()
     model.fit(X_train_scaled, y_train)
     
     # Predictions
@@ -90,7 +98,7 @@ def train(version_name=config.VERSION_NAME,
     # Save model to /models
     model_dir = Path(config.MODEL_PATH)
     model_dir.mkdir(parents=True, exist_ok=True)
-    model_path = model_dir / f"{version_name}_linear_regression.joblib"
+    model_path = model_dir / f"{version_name}_{config.MODEL_TYPE.lower()}.joblib"
     joblib.dump(model, model_path)
     print(f"\nModel saved to: {model_path}")
 
