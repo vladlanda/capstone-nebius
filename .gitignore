@@ -11,3 +11,5 @@ archived_experiments/
 data/
 # Virtual environments
 .venv
+rules.mdc/
+results/
