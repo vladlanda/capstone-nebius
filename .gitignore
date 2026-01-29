@@ -11,3 +11,4 @@ archived_experiments/
 data/
 # Virtual environments
 .venv
+.env
