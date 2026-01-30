@@ -23,3 +23,5 @@ python-dotenv>=1.0.0
 
 # Model persistence (already included in scikit-learn, but explicit)
 joblib>=1.3.0
+
+xgboost
