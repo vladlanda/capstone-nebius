@@ -21,7 +21,7 @@ def load_raw_data(raw_data_path):
     ny['city'] = "New York"
     airbnb = pd.concat([la, ny], axis=0).reset_index(drop=True).reset_index(names='id')
     print(f"Initial shape: {airbnb.shape}")
-    
+
     return airbnb
 
 
@@ -53,7 +53,7 @@ def impute_missing_values(df):
         .astype(float)[0])
     df["bathrooms"] = df["bathrooms"].fillna(bathrooms_extracted)
     df = df.drop('bathrooms_text', axis=1)
-    
+
     print(f"After handling missing values: {df.shape}")
     return df
 
@@ -62,12 +62,12 @@ def convert_date_columns(df):
     """Convert date columns to days since reference date."""
     date_cols = ['last_scraped', 'host_since', 'first_review', 'last_review']
     reference_date = pd.to_datetime('2024-01-01')
-    
+
     for col in date_cols:
         df[col] = pd.to_datetime(df[col])
         df[f'{col}_days_since'] = (df[col] - reference_date).dt.days
         df = df.drop(col, axis=1)
-    
+
     return df
 
 
@@ -100,7 +100,7 @@ def convert_numeric_columns(df):
         'maximum_maximum_nights', 'minimum_nights_avg_ntm', 'maximum_nights_avg_ntm', 'estimated_occupancy_l365d',
         'review_scores_rating'
     ]
-    
+
     for col in numeric_cols:
         if col in ['host_response_rate', 'host_acceptance_rate']:
             # Remove %, $ and commas, then convert to float and divide by 100
@@ -122,7 +122,7 @@ def convert_numeric_columns(df):
             )
         else:
             df[col] = df[col].astype(float)
-    
+
     return df
 
 
@@ -143,11 +143,11 @@ def parse_list(x):
 def encode_list_columns(df):
     """Encode list columns (host_verifications and amenities) using MultiLabelBinarizer."""
     list_cols = ['host_verifications', 'amenities']
-    
+
     # Parse list columns
     for col in list_cols:
         df[col] = df[col].apply(parse_list)
-    
+
     # Encode host_verifications
     mlb = MultiLabelBinarizer(sparse_output=True)
     sparse_matrix = mlb.fit_transform(df['host_verifications'])
@@ -178,7 +178,7 @@ def encode_list_columns(df):
 
     df = df.drop(columns=['amenities', 'amenities_filtered'])
     df = pd.concat([df, dummies], axis=1)
-    
+
     return df
 
 
@@ -192,7 +192,7 @@ def encode_categorical_columns(df):
     # One-hot encode
     categorical_cols = ['property_type', 'room_type', 'city']
     df = pd.get_dummies(df, columns=categorical_cols, drop_first=True, sparse=False, dtype=int)
-    
+
     return df
 
 
@@ -244,7 +244,7 @@ def split_and_save_data(df, version_name, split_ratio, seed, processed_data_path
     print(f"Saved full processed data: {df.shape} to {full_filepath}")
 
 
-def preprocess(raw_data_path=config.RAW_DATA_PATH, 
+def preprocess(raw_data_path=config.RAW_DATA_PATH,
                drop_duplicate_rows=True,
                handle_column_types=True,
                handle_missing_values=True,
@@ -298,10 +298,10 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     preprocess(raw_data_path=args.raw_data_path,
-                drop_duplicate_rows=args.drop_duplicate_rows, 
-                handle_column_types=args.handle_column_types, 
-                handle_missing_values=args.handle_missing_values, 
-                handle_outliers_flag=args.handle_outliers, 
+                drop_duplicate_rows=args.drop_duplicate_rows,
+                handle_column_types=args.handle_column_types,
+                handle_missing_values=args.handle_missing_values,
+                handle_outliers_flag=args.handle_outliers,
                 version_name=args.version_name,
                 split_ratio=args.split_ratio,
                 seed=args.seed,
