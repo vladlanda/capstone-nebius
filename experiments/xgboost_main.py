@@ -8,8 +8,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler,MinMaxScaler
 from dotenv import load_dotenv
+from sklearn.neighbors import KernelDensity
 
 # Set non-interactive backend for Matplotlib to avoid Thread/GUI errors
 import matplotlib
@@ -31,7 +32,8 @@ def load_credentials():
         )
     wandb.login()
     return {
-        "project": os.getenv("WANDB_PROJECT", "capstone-xgboost-optimization"),
+        "project": os.getenv("WANDB_PROJECT", "xgboost"),
+        # "project": os.getenv("WANDB_PROJECT", "capstone-xgboost-optimization"),
         "entity": os.getenv("WANDB_ENTITY", "asmazurik-company")
     }
 
@@ -45,8 +47,12 @@ def load_data(data_dir, val_size=0.2):
     # Load files based on the directory structure provided
     X_train_full = pd.read_csv(os.path.join(data_dir, "v1_X_train.csv"))
     y_train_full = pd.read_csv(os.path.join(data_dir, "v1_y_train.csv"))
+
     X_test = pd.read_csv(os.path.join(data_dir, "v1_X_test.csv"))
     y_test = pd.read_csv(os.path.join(data_dir, "v1_y_test.csv"))
+
+    X_train_full.drop(columns=['latitude','longitude'],inplace=True)
+    X_test.drop(columns=['latitude','longitude'],inplace=True)
 
     # Split training into train and validation BEFORE scaling to prevent leakage
     X_train_raw, X_val_raw, y_train, y_val = train_test_split(
@@ -57,30 +63,41 @@ def load_data(data_dir, val_size=0.2):
     )
 
     # Initialize and apply StandardScaler
-    scaler = StandardScaler()
-    
+    # scaler = StandardScaler()
+    scaler = MinMaxScaler()
     # Fit on training data only
     X_train_scaled = scaler.fit_transform(X_train_raw)
-    
     # Transform validation and test sets using the training fit
     X_val_scaled = scaler.transform(X_val_raw)
     X_test_scaled = scaler.transform(X_test)
-
     # Convert back to DataFrames to keep column names for plotting/XGBoost
     X_train = pd.DataFrame(X_train_scaled, columns=X_train_raw.columns)
     X_val = pd.DataFrame(X_val_scaled, columns=X_val_raw.columns)
     X_test = pd.DataFrame(X_test_scaled, columns=X_test.columns)
-
     # Prepare scaler parameters for logging
+    # scaler_params = {
+    #     "scaler_means": dict(zip(X_train_raw.columns, scaler.mean_)),
+    #     "scaler_scales": dict(zip(X_train_raw.columns, scaler.scale_))
+    # }
     scaler_params = {
-        "scaler_means": dict(zip(X_train_raw.columns, scaler.mean_)),
-        "scaler_scales": dict(zip(X_train_raw.columns, scaler.scale_))
+        "scaler_max": dict(zip(X_train_raw.columns, scaler.data_max_)),
+        "scaler_min": dict(zip(X_train_raw.columns, scaler.data_min_))
     }
 
     print(f"Data loaded and scaled successfully:")
     print(f" - Train: {X_train.shape}, Val: {X_val.shape}, Test: {X_test.shape}")
     
     return X_train, X_test, X_val, y_train, y_test, y_val, scaler_params
+
+def compute_sample_weights(y):
+    y_ = y.to_numpy().reshape(-1, 1)
+    kde = KernelDensity(kernel="gaussian", bandwidth=0.2).fit(y_)
+    log_density = kde.score_samples(y_)
+    density = np.exp(log_density)
+    beta = 0.3  # 0 = no weighting, 1 = full inverse density
+    weights = 1.0 / (density + 1e-6) ** beta
+    weights /= weights.mean()
+    return weights
 
 def get_sweep_config():
     """
@@ -133,6 +150,7 @@ def create_plots(y_true, y_pred, feature_names, booster):
 
     # Feature Importance (Weight)
     plt.figure(figsize=(10, 8))
+    booster.feature_names = feature_names
     xgb.plot_importance(booster, max_num_features=15, importance_type='weight')
     plt.title('Feature Importance (Weight)')
     plots["feature_importance_weight"] = wandb.Image(plt)
@@ -169,8 +187,9 @@ def train():
         ])
         run.name = run_name
 
+        sample_weights = compute_sample_weights(y_train)
         # Convert data to DMatrix for native API
-        dtrain = xgb.DMatrix(X_train, label=y_train)
+        dtrain = xgb.DMatrix(X_train, label=y_train)#,weight=sample_weights)
         dval = xgb.DMatrix(X_val, label=y_val)
         dtest = xgb.DMatrix(X_test, label=y_test)
 
@@ -197,7 +216,7 @@ def train():
             evals=[(dval, "val")],
             early_stopping_rounds=20,
             callbacks=[WandbCallback(log_model=True)],
-            verbose_eval=False
+            verbose_eval=False,
         )
 
         # Evaluation on Test Set
@@ -217,7 +236,7 @@ def train():
         })
 
         # Generate and log diagnostic plots
-        diagnostic_plots = create_plots(y_test, y_test_pred, X_train.columns, booster)
+        diagnostic_plots = create_plots(y_test, y_test_pred, list(X_train.columns), booster)
         run.log(diagnostic_plots)
 
 # ---------------------------------------------------------
@@ -244,4 +263,4 @@ if __name__ == "__main__":
     )
 
     # Run the sweep agent
-    wandb.agent(sweep_id, function=train, count=20)
+    wandb.agent(sweep_id, function=train, count=30)

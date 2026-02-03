@@ -287,16 +287,17 @@ def preprocess(raw_data_path=config.RAW_DATA_PATH,
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--raw-data-path", type=str, default=config.RAW_DATA_PATH)
-    parser.add_argument("--drop-duplicate-rows", type=bool, default=True)
-    parser.add_argument("--handle-column-types", type=bool, default=True)
-    parser.add_argument("--handle-missing-values", type=bool, default=True)
-    parser.add_argument("--handle-outliers", type=bool, default=True)
+    parser.add_argument("--drop-duplicate-rows", type=bool, default=False)
+    parser.add_argument("--handle-column-types", type=bool, default=False)
+    parser.add_argument("--handle-missing-values", type=bool, default=False)
+    parser.add_argument("--handle-outliers", type=bool, default=False)
     parser.add_argument("--version-name", type=str, default=config.VERSION_NAME)
     parser.add_argument("--split-ratio", type=float, default=config.TEST_SIZE)
     parser.add_argument("--seed", type=int, default=config.RANDOM_SEED)
     parser.add_argument("--processed_data_path", type=str, default=config.PROCESSED_DATA_PATH)
 
     args = parser.parse_args()
+    print(args)
     preprocess(raw_data_path=args.raw_data_path,
                 drop_duplicate_rows=args.drop_duplicate_rows,
                 handle_column_types=args.handle_column_types,
