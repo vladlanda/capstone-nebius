@@ -6,21 +6,36 @@ from collections import Counter
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.model_selection import train_test_split
 from config import config
+from dotenv import load_dotenv
+import os
+from openai import OpenAI
+import json
+import logging
+import sys
+from tqdm import tqdm
+from glob import glob
 
+logging.basicConfig(level=logging.INFO)
 
 def load_raw_data(raw_data_path):
     """Load and concatenate LA and NY Airbnb data."""
-    try:
-        la = pd.read_csv(f'{raw_data_path}airbnb_la_raw.csv')
-        ny = pd.read_csv(f'{raw_data_path}airbnb_ny_raw.csv')
-    except FileNotFoundError as e:
-        print(f"Error: Could not find input files in {raw_data_path}")
-        raise
+    # try:
+    #     la = pd.read_csv(f'{raw_data_path}airbnb_la_raw.csv')
+    #     ny = pd.read_csv(f'{raw_data_path}airbnb_ny_raw.csv')
+    # except FileNotFoundError as e:
+    #     logging.info(f"Error: Could not find input files in {raw_data_path}")
+    #     raise
 
-    la['city'] = "Los Angeles"
-    ny['city'] = "New York"
-    airbnb = pd.concat([la, ny], axis=0).reset_index(drop=True).reset_index(names='id')
-    print(f"Initial shape: {airbnb.shape}")
+    csv_files = glob(os.path.join(raw_data_path,'*.csv'))
+    dfs = [pd.read_csv(csv) for csv in csv_files]
+    for csv,df in zip(csv_files,dfs):
+        df['city'] = os.path.basename(csv).split('.')[0]
+
+    # la['city'] = "Los Angeles"
+    # ny['city'] = "New York"
+    # airbnb = pd.concat([la, ny], axis=0).reset_index(drop=True).reset_index(names='id')
+    airbnb = pd.concat(dfs, axis=0).reset_index(drop=True).reset_index(names='id')
+    logging.info(f"Initial shape: {airbnb.shape}")
 
     return airbnb
 
@@ -28,7 +43,7 @@ def load_raw_data(raw_data_path):
 def remove_duplicates(df):
     """Remove duplicate rows from dataframe."""
     df = df.drop_duplicates(subset=[c for c in df.columns if c != 'id'], keep='first')
-    print(f"After dropping duplicates: {df.shape}")
+    logging.info(f"After dropping duplicates: {df.shape}")
     return df
 
 
@@ -54,7 +69,7 @@ def impute_missing_values(df):
     df["bathrooms"] = df["bathrooms"].fillna(bathrooms_extracted)
     df = df.drop('bathrooms_text', axis=1)
 
-    print(f"After handling missing values: {df.shape}")
+    logging.info(f"After handling missing values: {df.shape}")
     return df
 
 
@@ -216,6 +231,14 @@ def prepare_final_dataset(df):
 
 def split_and_save_data(df, version_name, split_ratio, seed, processed_data_path):
     """Split data into train/test sets and save to disk."""
+        # Save full processed data
+    full_filepath = f'{processed_data_path}{version_name}_processed.csv'
+    os.makedirs(os.path.dirname(processed_data_path),exist_ok=True)
+    df.to_csv(full_filepath, index=False)
+    logging.info(f"Saved full processed data: {df.shape} to {full_filepath}")
+
+    if split_ratio <= 0: return
+
     X = df.drop(['review_scores_rating', 'id'], axis=1)
     y = df['review_scores_rating']
 
@@ -223,7 +246,7 @@ def split_and_save_data(df, version_name, split_ratio, seed, processed_data_path
         X, y, test_size=split_ratio, random_state=seed
     )
 
-    print(f"Train size: {len(X_train)}, Test size: {len(X_test)}")
+    logging.info(f"Train size: {len(X_train)}, Test size: {len(X_test)}")
 
     # Save split data
     datasets = {
@@ -232,23 +255,122 @@ def split_and_save_data(df, version_name, split_ratio, seed, processed_data_path
         'y_train': y_train,
         'y_test': y_test
     }
-
     for name, data in datasets.items():
         filepath = f'{processed_data_path}{version_name}_{name}.csv'
         data.to_csv(filepath, index=False)
-    print(f"Saved split data to {processed_data_path}")
+    logging.info(f"Saved split data to {processed_data_path}")
 
-    # Save full processed data
-    full_filepath = f'{processed_data_path}{version_name}_processed.csv'
-    df.to_csv(full_filepath, index=False)
-    print(f"Saved full processed data: {df.shape} to {full_filepath}")
 
+
+def llm_sentiment_analysis(df):
+
+    text_columns = ['description','neighborhood_overview','host_about','amenities']
+    load_dotenv()
+    # Init client
+    client = OpenAI(
+        api_key=os.getenv("NEBIUS_API_KEY"),
+        base_url="https://api.tokenfactory.nebius.com/v1/",
+
+    )
+    
+    SYSTEM_PROMPT = """You are an expert analyst of guest perception for rental listings.
+
+                    For EACH listing, estimate how EACH text field would independently influence
+                    a typical guest to give a rating between 0 and 5.
+
+                    Rules:
+                    - Output scores between 0 and 1
+                    - 0.5 = neutral / average
+                    - Penalize vague, generic, or missing text
+                    - Slightly penalize exaggerated marketing language
+                    - Be conservative: most scores should fall between 0.6 and 0.9
+
+                    Return valid JSON only.
+                    """
+    
+    def build_batch_prompt(rows):
+        blocks = []
+
+        for i, row in enumerate(rows):
+            blocks.append(f"""
+                        Listing {i}:
+                        Description:
+                        {row['description']}
+
+                        Neighborhood Overview:
+                        {row['neighborhood_overview']}
+
+                        Host About:
+                        {row['host_about']}
+
+                        Amenities:
+                        {row['amenities']}
+                        """)
+
+        listings_text = "\n".join(blocks)
+
+        return f"""
+                Evaluate each listing independently.
+
+                {listings_text}
+
+                Return JSON only as a list, one object per listing, in the SAME order:
+
+                [
+                {{
+                    "description_llm_score": <float>,
+                    "neighborhood_overview_llm_score": <float>,
+                    "host_about_llm_score": <float>,
+                    "amenities_llm_score": <float>
+                }}
+                ]
+                """
+
+    # lambda function to score a single row
+    def score_batch(rows):
+        prompt = build_batch_prompt(rows)
+
+        response = client.chat.completions.create(
+            model=config.LLM_MODEL_NAME,
+            temperature=0.1,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt}
+            ]
+        )
+
+        content = response.choices[0].message.content
+        return json.loads(content)  # list of dicts
+    
+    def chunk_df(df, batch_size):
+        for start in range(0, len(df), batch_size):
+            yield df.iloc[start:start + batch_size]
+
+    BATCH_SIZE = 50
+    results = []
+
+    df_tmp = df
+
+    for batch_df in tqdm(chunk_df(df_tmp, BATCH_SIZE)):
+        rows = batch_df.to_dict(orient="records")
+        batch_scores = score_batch(rows)
+        results.extend(batch_scores)
+
+    scores_df = pd.DataFrame(results, index=df_tmp.index)
+    df_tmp = pd.concat([df_tmp, scores_df], axis=1)
+    
+
+    # df = pd.concat([df, scores_df], axis=1)
+    logging.info(df_tmp.head())
+    return df_tmp
 
 def preprocess(raw_data_path=config.RAW_DATA_PATH,
-               drop_duplicate_rows=True,
-               handle_column_types=True,
-               handle_missing_values=True,
-               handle_outliers_flag=True,
+               drop_duplicate_rows=False,
+               sentiment_analysis = False,
+               keep_raw = False,
+               handle_column_types=False,
+               handle_missing_values=False,
+               handle_outliers_flag=False,
                version_name=config.VERSION_NAME,
                split_ratio=config.TEST_SIZE,
                seed=config.RANDOM_SEED,
@@ -260,6 +382,9 @@ def preprocess(raw_data_path=config.RAW_DATA_PATH,
     # Remove duplicates
     if drop_duplicate_rows:
         airbnb = remove_duplicates(airbnb)
+
+    if sentiment_analysis:
+        airbnb = llm_sentiment_analysis(airbnb)
 
     # Handle missing values
     if handle_missing_values:
@@ -279,7 +404,8 @@ def preprocess(raw_data_path=config.RAW_DATA_PATH,
         airbnb = handle_outliers(airbnb)
 
     # Prepare final dataset
-    airbnb = prepare_final_dataset(airbnb)
+    if not keep_raw:
+        airbnb = prepare_final_dataset(airbnb)
 
     # Split and save
     split_and_save_data(airbnb, version_name, split_ratio, seed, processed_data_path)
@@ -287,23 +413,28 @@ def preprocess(raw_data_path=config.RAW_DATA_PATH,
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--raw-data-path", type=str, default=config.RAW_DATA_PATH)
-    parser.add_argument("--drop-duplicate-rows", type=bool, default=True)
-    parser.add_argument("--handle-column-types", type=bool, default=True)
-    parser.add_argument("--handle-missing-values", type=bool, default=True)
-    parser.add_argument("--handle-outliers", type=bool, default=True)
+    parser.add_argument("--drop-duplicate-rows",    action='store_true', default=False)
+    parser.add_argument("--keep-raw-data",          action='store_true', default=False)
+    parser.add_argument("--llm-sentiment-analysis", action='store_true', default=False)
+    parser.add_argument("--handle-column-types",    action='store_true', default=False)
+    parser.add_argument("--handle-missing-values",  action='store_true', default=False)
+    parser.add_argument("--handle-outliers",        action='store_true', default=False)
     parser.add_argument("--version-name", type=str, default=config.VERSION_NAME)
     parser.add_argument("--split-ratio", type=float, default=config.TEST_SIZE)
     parser.add_argument("--seed", type=int, default=config.RANDOM_SEED)
     parser.add_argument("--processed_data_path", type=str, default=config.PROCESSED_DATA_PATH)
 
     args = parser.parse_args()
+    logging.info(f"Args : {sys.argv}")
     preprocess(raw_data_path=args.raw_data_path,
                 drop_duplicate_rows=args.drop_duplicate_rows,
+                sentiment_analysis = args.llm_sentiment_analysis,
+                keep_raw=args.keep_raw_data,
                 handle_column_types=args.handle_column_types,
                 handle_missing_values=args.handle_missing_values,
                 handle_outliers_flag=args.handle_outliers,
                 version_name=args.version_name,
                 split_ratio=args.split_ratio,
                 seed=args.seed,
-                processed_data_path=args.processed_data_path
+                processed_data_path=args.processed_data_path,
                 )
