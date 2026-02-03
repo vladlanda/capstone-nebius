@@ -17,3 +17,6 @@ class config:
     BATCH_SIZE = 32
     LEARNING_RATE = 0.001
     EPOCHS = 100
+
+    #LLM
+    LLM_MODEL_NAME = "openai/gpt-oss-120b"#'meta-llama/Meta-Llama-3.1-8B-Instruct'

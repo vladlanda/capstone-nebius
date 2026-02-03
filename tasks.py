@@ -1,0 +1,15 @@
+from invoke import task
+
+@task
+def preprocess_sentiment_analysis_keep_raw(c,preprocess_args = None):
+    if preprocess_args is None: preprocess_args = ''
+    cmd = (
+        f'python preprocess.py '
+        f'--keep-raw-data '
+        f'--llm-sentiment-analysis '
+        f'--processed_data_path "./data/raw_llm/" '
+        f'--version-name llm_sa '
+        f'--split-ratio -1'
+        f'{preprocess_args}'
+    )
+    c.run(cmd,pty=True)
