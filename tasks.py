@@ -13,3 +13,12 @@ def preprocess_sentiment_analysis_keep_raw(c,preprocess_args = None):
         f'{preprocess_args}'
     )
     c.run(cmd,pty=True)
+
+
+@task
+def xgboost_experiment(c):
+
+    cmd = (
+        f'python experiments/xgboost_main.py'
+    )
+    c.run(cmd,pty=True)

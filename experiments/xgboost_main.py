@@ -63,8 +63,8 @@ def load_data(data_dir, val_size=0.2):
     )
 
     # Initialize and apply StandardScaler
-    # scaler = StandardScaler()
-    scaler = MinMaxScaler()
+    scaler = StandardScaler()
+    # scaler = MinMaxScaler()
     # Fit on training data only
     X_train_scaled = scaler.fit_transform(X_train_raw)
     # Transform validation and test sets using the training fit
@@ -75,14 +75,14 @@ def load_data(data_dir, val_size=0.2):
     X_val = pd.DataFrame(X_val_scaled, columns=X_val_raw.columns)
     X_test = pd.DataFrame(X_test_scaled, columns=X_test.columns)
     # Prepare scaler parameters for logging
-    # scaler_params = {
-    #     "scaler_means": dict(zip(X_train_raw.columns, scaler.mean_)),
-    #     "scaler_scales": dict(zip(X_train_raw.columns, scaler.scale_))
-    # }
     scaler_params = {
-        "scaler_max": dict(zip(X_train_raw.columns, scaler.data_max_)),
-        "scaler_min": dict(zip(X_train_raw.columns, scaler.data_min_))
+        "scaler_means": dict(zip(X_train_raw.columns, scaler.mean_)),
+        "scaler_scales": dict(zip(X_train_raw.columns, scaler.scale_))
     }
+    # scaler_params = {
+        # "scaler_max": dict(zip(X_train_raw.columns, scaler.data_max_)),
+        # "scaler_min": dict(zip(X_train_raw.columns, scaler.data_min_))
+    # }
 
     print(f"Data loaded and scaled successfully:")
     print(f" - Train: {X_train.shape}, Val: {X_val.shape}, Test: {X_test.shape}")
@@ -110,11 +110,11 @@ def get_sweep_config():
           'goal': 'minimize'   
         },
         'parameters': {
-            'n_estimators': { 'values': [100,200,500,700,1000] },
+            'n_estimators': { 'values': [700,1000] },
             'learning_rate': { 'distribution': 'uniform', 'min': 0.01, 'max': 0.5 },
             'max_depth': { 'distribution': 'int_uniform', 'min': 10, 'max': 100 },
-            'subsample': { 'distribution': 'uniform', 'min': 0.5, 'max': 1.0 },
-            'colsample_bytree': { 'distribution': 'uniform', 'min': 0.5, 'max': 1.0 },
+            'subsample': { 'distribution': 'uniform', 'min': 0.1, 'max': 1.0 },
+            'colsample_bytree': { 'distribution': 'uniform', 'min': 0.1, 'max': 1.0 },
             'gamma': { 'distribution': 'uniform', 'min': 0, 'max': 5 },
             'reg_alpha': { 'distribution': 'uniform', 'min': 0, 'max': 10 },
             'reg_lambda': { 'distribution': 'uniform', 'min': 1, 'max': 10 }
@@ -214,7 +214,7 @@ def train():
             dtrain,
             num_boost_round=config.n_estimators,
             evals=[(dval, "val")],
-            early_stopping_rounds=20,
+            early_stopping_rounds=30,
             callbacks=[WandbCallback(log_model=True)],
             verbose_eval=False,
         )
@@ -263,4 +263,4 @@ if __name__ == "__main__":
     )
 
     # Run the sweep agent
-    wandb.agent(sweep_id, function=train, count=30)
+    wandb.agent(sweep_id, function=train, count=40)
