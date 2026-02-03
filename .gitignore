@@ -9,7 +9,7 @@ wandb/
 models/
 archived_experiments/
 /data/*/
-!/data/raw*/
+# !/data/raw*/
 /checkpoints/*/
 # Virtual environments
 .venv
