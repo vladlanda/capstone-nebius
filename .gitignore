@@ -6,7 +6,7 @@ dist/
 wheels/
 wandb/
 *.egg-info
-models/
+# models/
 archived_experiments/
 data/
 # !/data/raw*/

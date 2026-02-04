@@ -34,8 +34,8 @@ def load_raw_data(raw_data_path):
 
     csv_files = glob(os.path.join(raw_data_path,'*.csv'))
     dfs = [pd.read_csv(csv) for csv in csv_files]
-    for csv,df in zip(csv_files,dfs):
-        df['city'] = os.path.basename(csv).split('.')[0]
+    # for csv,df in zip(csv_files,dfs):
+    #     df['city'] = os.path.basename(csv).split('.')[0]
     
     # la['city'] = "Los Angeles"
     # ny['city'] = "New York"
@@ -214,7 +214,7 @@ def encode_categorical_columns(df):
     df['property_type'] = df['property_type'].replace(rare_properties, 'Other')
 
     # One-hot encode
-    categorical_cols = ['property_type', 'room_type', 'city']
+    categorical_cols = ['property_type', 'room_type']
     df = pd.get_dummies(df, columns=categorical_cols, drop_first=True, sparse=False, dtype=int)
 
     return df
@@ -249,6 +249,8 @@ def split_and_save_data(df, version_name, split_ratio, seed, processed_data_path
     if split_ratio <= 0: return
 
     X = df.drop(['review_scores_rating', 'id'], axis=1)
+    # mask = df.columns.str.contains('city')
+    # X = df.loc[:, ~mask]
     y = df['review_scores_rating']
 
     X_train, X_test, y_train, y_test = train_test_split(
