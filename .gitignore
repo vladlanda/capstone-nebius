@@ -8,7 +8,7 @@ wandb/
 *.egg-info
 models/
 archived_experiments/
-/data/*/
+data/
 # !/data/raw*/
 /checkpoints/*/
 # Virtual environments

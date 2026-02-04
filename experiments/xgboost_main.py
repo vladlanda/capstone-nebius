@@ -13,71 +13,65 @@ from sklearn.preprocessing import StandardScaler
 from dotenv import load_dotenv
 from sklearn.neighbors import KernelDensity
 import sys
+
 # Set non-interactive backend for Matplotlib to avoid Thread/GUI errors
 import matplotlib
 matplotlib.use('Agg')
 
-# Get the absolute path of the parent directory
+# Get the absolute path of the parent directory for imports
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-# Add the parent directory to sys.path
 sys.path.append(parent_dir)
 
-from preprocess import load_raw_data,convert_numeric_columns
+# Assuming these helpers exist in your environment
+try:
+    from preprocess import load_raw_data, convert_numeric_columns
+except ImportError:
+    # Fallback if the local preprocess module isn't accessible
+    def load_raw_data(path): return pd.read_csv(path)
+    def convert_numeric_columns(df): return df
 
+# ---------------------------------------------------------
+# 1. PREPROCESSING & DATA LOADING
+# ---------------------------------------------------------
 
 def clean_and_feature_engineer(df):
     """
-    Advanced preprocessing for NYC Airbnb data to break the 0.41 RMSE plateau.
+    Advanced preprocessing for NYC Airbnb data.
     """
     # 1. Target Cleaning
-    # Drop rows where the target is missing
     df = df.dropna(subset=['review_scores_rating']).copy()
     
     # 2. Temporal Features
-    # Convert dates to datetime objects
     date_cols = ['host_since', 'first_review', 'last_review', 'last_scraped']
     for col in date_cols:
         df[col] = pd.to_datetime(df[col], errors='coerce')
     
-    # Calculate 'Host Tenure' (Days since host started)
     df['host_tenure_days'] = (df['last_scraped'] - df['host_since']).dt.days
-    # Calculate 'Listing Age'
     df['listing_age_days'] = (df['last_scraped'] - df['first_review']).dt.days
-    # Time since last review (recency of activity)
     df['days_since_last_review'] = (df['last_scraped'] - df['last_review']).dt.days
     
-    # 3. Numeric Cleaning (Price & Rates)
-    # Remove '$' and ',' from price
+    # 3. Numeric Cleaning
     if df['price'].dtype == 'object':
         df['price'] = df['price'].str.replace('$', '').str.replace(',', '').astype(float)
     
-    # Fill percentage rates (e.g., '95%')
     for col in ['host_response_rate', 'host_acceptance_rate']:
         if df[col].dtype == 'object':
             df[col] = df[col].str.replace('%', '').astype(float)
             
-    # 4. Property Ratios (Density/Quality indicators)
-    # Avoid division by zero
+    # 4. Property Ratios
     df['beds_per_bedroom'] = df['beds'] / (df['bedrooms'].replace(0, 1))
     df['accommodates_per_bedroom'] = df['accommodates'] / (df['bedrooms'].replace(0, 1))
     
     # 5. Amenity Engineering
-    # Instead of just binary, let's look for "Premium" keywords in the amenities string
     premium_amenities = ['dishwasher', 'washer', 'dryer', 'private entrance', 'coffee maker', 'balcony']
     df['amenities'] = df['amenities'].str.lower()
     df['premium_amenity_count'] = 0
     for amenity in premium_amenities:
         df['premium_amenity_count'] += df['amenities'].str.contains(amenity).fillna(False).astype(int)
     
-    # Total count of amenities
     df['total_amenity_count'] = df['amenities'].str.count(',').fillna(0) + 1
 
-    # 6. Categorical Encoding
-    # For property_type and room_type, we'll use simple dummies for now
-    # But for neighborhood, we'll use a simplified mapping or top 20
-    df['room_type'] = df['room_type'].astype('category')
-    
-    # 7. Select final feature set
+    # 6. Feature Selection
     cols_to_keep = [
         'host_is_superhost', 'host_listings_count', 'host_total_listings_count',
         'accommodates', 'bedrooms', 'beds', 'price', 'minimum_nights',
@@ -87,12 +81,15 @@ def clean_and_feature_engineer(df):
         'premium_amenity_count', 'total_amenity_count'
     ]
     
-    # Convert booleans to int
+    # Add sentiment scores if they exist in the dataframe
+    sentiment_cols = [c for c in df.columns if '_llm_score' in c]
+    cols_to_keep.extend(sentiment_cols)
+    
     bool_cols = ['host_is_superhost', 'instant_bookable']
     for col in bool_cols:
         df[col] = df[col].map({'t': 1, 'f': 0}).fillna(0).astype(int)
         
-    X = df[cols_to_keep].fillna(0) # Fill remaining NAs with 0
+    X = df[cols_to_keep].fillna(0)
     y = df['review_scores_rating']
     
     return X, y
@@ -101,153 +98,101 @@ def prepare_data_for_xgboost(input_csv):
     df = load_raw_data(input_csv)
     df = convert_numeric_columns(df)
     X, y = clean_and_feature_engineer(df)
+    # print(df.head())
+    X = X[['description_llm_score'	,'host_about_llm_score'	,'neighborhood_overview_llm_score']]
     
-    # Train/Test Split
     X_train_raw, X_test_raw, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
     
-    # Scaling
     scaler = StandardScaler()
     X_train = pd.DataFrame(scaler.fit_transform(X_train_raw), columns=X.columns)
     X_test = pd.DataFrame(scaler.transform(X_test_raw), columns=X.columns)
     
     return X_train, X_test, y_train, y_test
-# ---------------------------------------------------------
-# 1. SETUP & CONFIGURATION
-# ---------------------------------------------------------
 
 def load_credentials():
-    """
-    Loads environment variables and logs into W&B.
-    """
     load_dotenv()
     if not os.getenv("WANDB_API_KEY"):
-        raise ValueError(
-            "WANDB_API_KEY not found in environment variables. "
-            "Please create a .env file with WANDB_API_KEY=your_key_here"
-        )
+        raise ValueError("WANDB_API_KEY not found.")
     wandb.login()
     return {
-        "project": os.getenv("WANDB_PROJECT", "xgboost-airbnb-optimization"),
+        "project": os.getenv("WANDB_PROJECT", "xgboost-airbnb-regression"),
         "entity": os.getenv("WANDB_ENTITY", "asmazurik-company")
     }
 
-def target_transform(y):
-    """
-    Applies a reflection log transform to handle the heavy left-skew of ratings.
-    y = log(max_possible_rating + small_offset - y)
-    
-    We clip to a very small positive value because Tweedie labels must be >= 0.
-    """
-    # 5.01 - y will be 0.01 for a perfect 5.0 rating.
-    # log(0.01) is negative, which crashes Tweedie. 
-    # We shift the log result to be non-negative or use the raw difference.
-    # For Tweedie, let's use the raw reflection (dist from perfect) directly.
-    return np.clip(5.01 - y, 1e-6, None)
-
-def inverse_target_transform(y_transformed):
-    """
-    Reverts the transform back to the original 1-5 scale.
-    """
-    return 5.01 - y_transformed
-
 def load_data(data_dir, val_size=0.2):
-    """
-    Reads CSV files, prepares scaled X and transformed y.
-    """
-    print(f"Loading data from {data_dir}...")
+    print(f"Loading data...")
+    # Update this path to your actual data source
+    X_train_full, X_test_orig, y_train_full, y_test_orig = prepare_data_for_xgboost('./data/raw_llm/')
 
-    X_train_full ,X_test_orig ,y_train_full  ,y_test_orig = prepare_data_for_xgboost('./data/raw/')
-    
-    # X_train_full = pd.read_csv(os.path.join(data_dir, "v1_X_train.csv"))
-    # y_train_full = pd.read_csv(os.path.join(data_dir, "v1_y_train.csv"))
-    # X_test_orig  = pd.read_csv(os.path.join(data_dir, "v1_X_test.csv"))
-    # y_test_orig  = pd.read_csv(os.path.join(data_dir, "v1_y_test.csv"))
-
-    # Basic cleaning
-    # X_train_full.drop(columns=['latitude', 'longitude'], inplace=True, errors='ignore')
-    # X_test_orig.drop(columns=['latitude', 'longitude'], inplace=True, errors='ignore')
-
-    X_train_raw, X_val_raw, y_train_raw, y_val_raw = train_test_split(
-        X_train_full, 
-        y_train_full, 
-        test_size=val_size, 
-        random_state=42
+    X_train_raw, X_val_raw, y_train, y_val = train_test_split(
+        X_train_full, y_train_full, test_size=val_size, random_state=42
     )
 
-    # Scaling Features
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train_raw)
-    X_val_scaled = scaler.transform(X_val_raw)
-    X_test_scaled = scaler.transform(X_test_orig)
+    return X_train_raw, X_test_orig, X_val_raw, y_train, y_val, y_test_orig
 
-    X_train = pd.DataFrame(X_train_scaled, columns=X_train_raw.columns)
-    X_val = pd.DataFrame(X_val_scaled, columns=X_val_raw.columns)
-    X_test = pd.DataFrame(X_test_scaled, columns=X_test_orig.columns)
-
-    # TRANSFORM TARGET
-    # Tweedie needs non-negative values. We model the "distance from perfection".
-    y_train = target_transform(y_train_raw)
-    y_val = target_transform(y_val_raw)
-
-    scaler_params = {
-        "scaler_means": dict(zip(X_train_raw.columns, scaler.mean_)),
-        "scaler_scales": dict(zip(X_train_raw.columns, scaler.scale_))
-    }
-
-    return X_train, X_test, X_val, y_train, y_val, y_test_orig, scaler_params
+# ---------------------------------------------------------
+# 2. SWEEP & TRAINING
+# ---------------------------------------------------------
 
 def get_sweep_config():
     """
-    Sweep configuration optimized for Tweedie distribution and avoiding overfitting.
+    Standard regression sweep config.
     """
     return {
         'method': 'bayes',
-        'metric': {
-          'name': 'test_rmse', 
-          'goal': 'minimize'   
-        },
+        'metric': {'name': 'test_rmse', 'goal': 'minimize'},
         'parameters': {
-            'feature_fraction': { 'distribution': 'uniform', 'min': 0.5, 'max': 1.0 },
-            'n_estimators': { 'values': [500, 1000, 1500] },
-            'learning_rate': { 'distribution': 'uniform', 'min': 0.01, 'max': 0.1 },
-            'max_depth': { 'distribution': 'int_uniform', 'min': 3, 'max': 8 },
-            'subsample': { 'distribution': 'uniform', 'min': 0.6, 'max': 1.0 },
-            'colsample_bytree': { 'distribution': 'uniform', 'min': 0.4, 'max': 0.8 },
-            'tweedie_variance_power': { 'distribution': 'uniform', 'min': 1.0, 'max': 1.5 },
-            'gamma': { 'distribution': 'uniform', 'min': 0, 'max': 10 },
-            'reg_alpha': { 'distribution': 'uniform', 'min': 0.1, 'max': 20 },
-            'reg_lambda': { 'distribution': 'uniform', 'min': 1, 'max': 20 }
+            'feature_fraction': {'distribution': 'uniform', 'min': 0.5, 'max': 1.0},
+            'n_estimators': {'values': [500, 1000, 1500]},
+            'learning_rate': {'distribution': 'uniform', 'min': 0.01, 'max': 0.1},
+            'max_depth': {'distribution': 'int_uniform', 'min': 3, 'max': 10},
+            'subsample': {'distribution': 'uniform', 'min': 0.6, 'max': 1.0},
+            'colsample_bytree': {'distribution': 'uniform', 'min': 0.4, 'max': 0.8},
+            'gamma': {'distribution': 'uniform', 'min': 0, 'max': 10},
+            'reg_alpha': {'distribution': 'uniform', 'min': 0.1, 'max': 20},
+            'reg_lambda': {'distribution': 'uniform', 'min': 1, 'max': 20}
         }
     }
 
 def create_plots(y_true, y_pred, feature_names, booster):
     plots = {}
+    
+    # 1. Residual Plot
     plt.figure(figsize=(10, 6))
     residuals = y_true.values.flatten() - y_pred.flatten()
-    sns.scatterplot(x=y_pred.flatten(), y=residuals)
+    sns.scatterplot(x=y_pred.flatten(), y=residuals, alpha=0.5)
     plt.axhline(0, color='red', linestyle='--')
-    plt.xlabel('Predicted Values')
+    plt.xlabel('Predicted')
     plt.ylabel('Residuals')
-    plt.title('Residuals vs Predicted (Original Scale)')
+    plt.title('Residuals vs Predicted')
     plots["residuals_plot"] = wandb.Image(plt)
     plt.close()
 
-    plt.figure(figsize=(10, 8))
-    booster.feature_names = feature_names
-    xgb.plot_importance(booster, max_num_features=15, importance_type='gain')
-    plt.title('Feature Importance (Gain)')
-    plots["feature_importance_gain"] = wandb.Image(plt)
+    # 2. Actual vs Predicted Plot (R2 Visualization)
+    plt.figure(figsize=(10, 6))
+    plt.scatter(y_true, y_pred, alpha=0.5, color='teal')
+    
+    # Calculate R2 for the plot title
+    r2 = r2_score(y_true, y_pred)
+    
+    # Add diagonal reference line
+    min_val = min(y_true.min(), y_pred.min())
+    max_val = max(y_true.max(), y_pred.max())
+    plt.plot([min_val, max_val], [min_val, max_val], color='red', linestyle='--', label='Ideal')
+    
+    plt.xlabel('Actual Values')
+    plt.ylabel('Predicted Values')
+    plt.title(f'Actual vs Predicted (R²: {r2:.4f})')
+    plt.legend()
+    plots["predicted_vs_actual_plot"] = wandb.Image(plt)
     plt.close()
+    
     return plots
 
-# ---------------------------------------------------------
-# 2. DEFINE TRAINING FUNCTION
-# ---------------------------------------------------------
-
 def train():
-    global X_train_all, X_test_all, X_val_all, y_train, y_val, y_test_orig, scaler_params
+    global X_train_all, X_test_all, X_val_all, y_train, y_val, y_test_orig
 
     with wandb.init() as run:
         config = run.config
@@ -260,33 +205,19 @@ def train():
         
         run.config.update({"selected_features": selected_features})
         
-        # 2. Create Run Name based on Parameters
-        run_name = "_".join([
-            f"f{config.feature_fraction:.2f}",
-            f"tw{config.tweedie_variance_power:.2f}",
-            f"n{config.n_estimators}",
-            f"lr{config.learning_rate:.3f}",
-            f"d{config.max_depth}",
-            f"sub{config.subsample:.2f}",
-            f"col{config.colsample_bytree:.2f}",
-            f"g{config.gamma:.2f}",
-            f"a{config.reg_alpha:.2f}",
-            f"l{config.reg_lambda:.2f}"
-        ])
-        run.name = run_name
+        # 2. Run Name
+        run.name = f"reg_d{config.max_depth}_lr{config.learning_rate:.3f}_f{config.feature_fraction:.2f}"
 
         X_train_sub = X_train_all[selected_features]
         X_val_sub = X_val_all[selected_features]
         X_test_sub = X_test_all[selected_features]
 
-        # DMatrix creation
         dtrain = xgb.DMatrix(X_train_sub, label=y_train)
         dval = xgb.DMatrix(X_val_sub, label=y_val)
         dtest = xgb.DMatrix(X_test_sub)
 
         params = {
-            "objective": "reg:tweedie", 
-            "tweedie_variance_power": config.tweedie_variance_power,
+            "objective": "reg:squarederror", # Back to standard regression
             "max_depth": config.max_depth,
             "learning_rate": config.learning_rate,
             "subsample": config.subsample,
@@ -295,7 +226,7 @@ def train():
             "alpha": config.reg_alpha,
             "lambda": config.reg_lambda,
             "tree_method": "hist",
-            "eval_metric": "mae", 
+            "eval_metric": "rmse", 
             "random_state": 42
         }
 
@@ -309,11 +240,8 @@ def train():
             verbose_eval=False,
         )
 
-        # PREDICTION & INVERSE TRANSFORM
-        y_test_pred_transformed = booster.predict(dtest)
-        y_test_pred = inverse_target_transform(y_test_pred_transformed)
+        y_test_pred = booster.predict(dtest)
         
-        # Calculate real-world metrics on original 1-5 scale
         rmse = np.sqrt(mean_squared_error(y_test_orig, y_test_pred))
         mae = mean_absolute_error(y_test_orig, y_test_pred)
         r2 = r2_score(y_test_orig, y_test_pred)
@@ -325,21 +253,14 @@ def train():
             "best_iteration": booster.best_iteration
         })
 
-        diagnostic_plots = create_plots(y_test_orig, y_test_pred, selected_features, booster)
-        run.log(diagnostic_plots)
-
-# ---------------------------------------------------------
-# 3. EXECUTION
-# ---------------------------------------------------------
+        plots = create_plots(y_test_orig, y_test_pred, selected_features, booster)
+        run.log(plots)
 
 if __name__ == "__main__":
     settings = load_credentials()
     sweep_config = get_sweep_config()
     
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    data_path = os.path.join(script_dir, '..', 'data', 'processed')
-    
-    X_train_all, X_test_all, X_val_all, y_train, y_val, y_test_orig, scaler_params = load_data(data_dir=data_path)
+    X_train_all, X_test_all, X_val_all, y_train, y_val, y_test_orig = load_data('./data/raw_llm/')
     
     sweep_id = wandb.sweep(sweep_config, project=settings["project"], entity=settings["entity"])
     wandb.agent(sweep_id, function=train, count=40)

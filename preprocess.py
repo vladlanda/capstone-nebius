@@ -36,11 +36,14 @@ def load_raw_data(raw_data_path):
     dfs = [pd.read_csv(csv) for csv in csv_files]
     for csv,df in zip(csv_files,dfs):
         df['city'] = os.path.basename(csv).split('.')[0]
-
+    
     # la['city'] = "Los Angeles"
     # ny['city'] = "New York"
     # airbnb = pd.concat([la, ny], axis=0).reset_index(drop=True).reset_index(names='id')
-    airbnb = pd.concat(dfs, axis=0).reset_index(drop=True).reset_index(names='id')
+    if len(dfs) > 1: 
+        airbnb = pd.concat(dfs, axis=0).reset_index(drop=True).reset_index(names='id')
+    else:
+        airbnb = dfs[0]
     logging.info(f"Initial shape: {airbnb.shape}")
 
     return airbnb
