@@ -104,30 +104,19 @@ def main(args):
                 with st.spinner('Preprocessing and Predicting...'):
                     
                     # 1. Run preprocessing with CLI arguments
-                    # processed_df = run_preprocess_pipeline(input_df.copy(), args)
                     processed_df = preprocess.preprocess_v2(input_df.copy(), args)
-                    st.info(f"columns {len(processed_df.columns)}, {processed_df.columns}")
+                    
                     if processed_df is not None:
-                        st.success("CSV format not aligned to the original schema.")
-                    # if processed_df is not None:
-                    #     # 2. SCHEMA ALIGNMENT
-                    #     # Add missing columns (fill with 0)
-                    #     missing_cols = set(expected_features) - set(processed_df.columns)
-                    #     if missing_cols:
-                    #         for c in missing_cols:
-                    #             processed_df[c] = 0
+                        # Load schema and align columns
+                        import json
+                        schema_path = os.path.join(config.MODEL_PATH, f"{config.VERSION_NAME}_{args.model}_schema.json")
+                        with open(schema_path) as f:
+                            expected_cols = json.load(f)["columns"]
                         
-                    #     # Remove extra columns
-                    #     extra_cols = set(processed_df.columns) - set(expected_features)
+                        # Align to schema: add missing=0, drop extra, reorder
+                        processed_df = processed_df.reindex(columns=expected_cols, fill_value=0)
                         
-                    #     # Reorder to match training
-                    #     try:
-                    #         processed_df = processed_df[expected_features]
-                    #     except KeyError as e:
-                    #         st.error(f"Column alignment error: {e}")
-                    #         st.stop()
-
-                        # 3. Predict
+                        # Predict
                         try:
                             predictions = pipeline.predict(processed_df)
                             
@@ -145,7 +134,7 @@ def main(args):
                                 mime='text/csv',
                             )
                         except Exception as e:
-                            st.error(f"Prediction logic failed: {e}")
+                            st.error(f"Prediction failed: {e}")
         except Exception as e:
             st.error(f"Error reading file: {e}")
 

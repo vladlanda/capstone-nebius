@@ -79,7 +79,7 @@ def impute_missing_values(df):
     bathrooms_extracted = (df["bathrooms_text"]
         .str.extract(r"(\d+\.?\d*)")
         .astype(float)[0])
-    df.loc["bathrooms"] = df["bathrooms"].fillna(bathrooms_extracted)
+    df["bathrooms"] = df["bathrooms"].fillna(bathrooms_extracted)
     df = df.drop('bathrooms_text', axis=1)
 
     logging.info(f"After handling missing values: {df.shape}")
@@ -577,19 +577,36 @@ def save_data(df, version_name, name, processed_data_path):
 def preprocess_v2_wrapper(args):
 
     df = load_raw_data(args.raw_data_path)
-    df = df.dropna(subset=['review_scores_rating'],axis=0)
-    df_types = ['X_train','X_test','y_train','y_test']
+    df = df.dropna(subset=['review_scores_rating'])
 
-    X = df.drop(['review_scores_rating', 'id'], axis=1)
-    y = df['review_scores_rating']
-    dfs = train_test_split(X,y,test_size=args.split_ratio,random_state=args.seed)
+    train_df, test_df = train_test_split(
+        df,
+        test_size=args.split_ratio,
+        random_state=args.seed
+    )
 
-    for name,df in zip(df_types,dfs):
-        
-        if 'X' in name:
-            df = preprocess_v2(df,args)
-            # print(len(df.columns))
-        save_data(df,args.version_name,name,args.processed_data_path)
+    train_df = preprocess_v2(train_df, args)
+    test_df  = preprocess_v2(test_df, args)
+
+    y_train = train_df['review_scores_rating']
+    X_train = train_df.drop(['review_scores_rating', 'id'], axis=1, errors='ignore')
+
+    y_test = test_df['review_scores_rating']
+    X_test = test_df.drop(['review_scores_rating', 'id'], axis=1, errors='ignore')
+
+    X_test = X_test.reindex(columns=X_train.columns, fill_value=0)
+
+    # Validation: Assert row counts match
+    assert len(X_train) == len(y_train), f"Row mismatch: X_train={len(X_train)}, y_train={len(y_train)}"
+    assert len(X_test) == len(y_test), f"Row mismatch: X_test={len(X_test)}, y_test={len(y_test)}"
+    print(f"✓ Row counts validated: X_train={len(X_train)}, y_train={len(y_train)}")
+    print(f"✓ Row counts validated: X_test={len(X_test)}, y_test={len(y_test)}")
+    print(f"✓ Feature count: {len(X_train.columns)}")
+
+    save_data(X_train, args.version_name, 'X_train', args.processed_data_path)
+    save_data(X_test,  args.version_name, 'X_test',  args.processed_data_path)
+    save_data(y_train, args.version_name, 'y_train', args.processed_data_path)
+    save_data(y_test,  args.version_name, 'y_test',  args.processed_data_path)
         
 def preprocess_v2(df,args):
 
