@@ -63,7 +63,17 @@ def train(model_name = 'linear',version_name=config.VERSION_NAME,
             ):
 
     X_train, X_test, y_train, y_test = get_data()
-    print(len(X_train.columns),len(X_test.columns))
+    
+    # Save schema for inference alignment
+    import json
+    schema_path = Path(config.MODEL_PATH) / f"{version_name}_{model_name}_schema.json"
+    Path(config.MODEL_PATH).mkdir(parents=True, exist_ok=True)
+    schema = {"columns": list(X_train.columns)}
+    schema_path.write_text(json.dumps(schema, indent=2))
+    print(f"Saved schema: {schema_path} with {len(schema['columns'])} columns")
+    
+    print(f"X_train shape: {X_train.shape}, y_train shape: {y_train.shape}")
+    print(f"X_test shape: {X_test.shape}, y_test shape: {y_test.shape}")
     print(f"Training with version: {version_name}")
 
     # Initialize wandb
@@ -135,8 +145,8 @@ def train(model_name = 'linear',version_name=config.VERSION_NAME,
     model_dir = Path(config.MODEL_PATH)
     model_dir.mkdir(parents=True, exist_ok=True)
     model_path = model_dir / f"{version_name}_{model_name}.joblib"
-    joblib.dump(model, model_path)
-    print(f"\nModel saved to: {model_path}")
+    joblib.dump(pipeline, model_path)
+    print(f"\nPipeline saved to: {model_path}")
 
     # Save predictions to /results
     results_dir = Path(config.RESULTS_PATH)
