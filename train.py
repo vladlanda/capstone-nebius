@@ -63,7 +63,7 @@ def train(model_name = 'linear',version_name=config.VERSION_NAME,
             ):
 
     X_train, X_test, y_train, y_test = get_data()
-
+    print(len(X_train.columns),len(X_test.columns))
     print(f"Training with version: {version_name}")
 
     # Initialize wandb

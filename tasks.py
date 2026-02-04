@@ -29,15 +29,24 @@ def train_xgboost(c):
     c.run(cmd,pty=True)
 
 @task 
-def run_preprocessing(c):
+def preprocess(c):
     cmd = (
         f'python preprocess.py --drop-duplicate-rows --handle-column-types --handle-missing-values --handle-outliers'
     )
     c.run(cmd,pty=True)
 
 @task 
-def run_server(c):
+def server(c):
     cmd = (
         f'streamlit run server.py -- --model xgboost --drop-duplicate-rows --handle-column-types --handle-missing-values --handle-outliers'
     )
     c.run(cmd,pty=True)
+
+# @task
+# def run_all(c):
+#     cmd = (
+#         'invoke preprocess '
+#         'invoke train_xgboost '
+#         'invoke server'
+#     )
+#     c.run(cmd,pty=True)

@@ -8,8 +8,8 @@ wandb/
 *.egg-info
 # models/
 archived_experiments/
-data/
-# !/data/raw*/
+/data/*/
+!/data/raw/
 /checkpoints/*/
 # Virtual environments
 .venv

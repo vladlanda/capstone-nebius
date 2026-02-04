@@ -34,6 +34,9 @@ def load_raw_data(raw_data_path):
 
     csv_files = glob(os.path.join(raw_data_path,'*.csv'))
     dfs = [pd.read_csv(csv) for csv in csv_files]
+
+
+
     # for csv,df in zip(csv_files,dfs):
     #     df['city'] = os.path.basename(csv).split('.')[0]
     
@@ -69,13 +72,14 @@ def impute_missing_values(df):
             )
 
     # Drop rows with missing target values
-    df = df.dropna(subset=['first_review', 'last_review', 'review_scores_rating'], how='any')
+    # df = df.dropna(subset=['first_review', 'last_review', 'review_scores_rating'], how='any')
+    df = df.dropna(subset=['first_review', 'last_review'], how='any')
 
     # Extract bathrooms from bathrooms_text
     bathrooms_extracted = (df["bathrooms_text"]
         .str.extract(r"(\d+\.?\d*)")
         .astype(float)[0])
-    df["bathrooms"] = df["bathrooms"].fillna(bathrooms_extracted)
+    df.loc["bathrooms"] = df["bathrooms"].fillna(bathrooms_extracted)
     df = df.drop('bathrooms_text', axis=1)
 
     logging.info(f"After handling missing values: {df.shape}")
@@ -122,7 +126,7 @@ def convert_numeric_columns(df):
         'latitude', 'longitude', 'accommodates', 'bathrooms', 'bedrooms', 'beds', 'price', 'minimum_nights',
         'maximum_nights', 'minimum_minimum_nights', 'maximum_minimum_nights', 'minimum_maximum_nights',
         'maximum_maximum_nights', 'minimum_nights_avg_ntm', 'maximum_nights_avg_ntm', 'estimated_occupancy_l365d',
-        'review_scores_rating'
+        # 'review_scores_rating'
     ]
 
     for col in numeric_cols:
@@ -149,7 +153,6 @@ def convert_numeric_columns(df):
 
     return df
 
-
 def parse_list(x):
     """Parse string representations of lists."""
     if pd.isna(x) or x == '' or x == '[]':
@@ -162,7 +165,6 @@ def parse_list(x):
         except:
             return []
     return []
-
 
 def encode_list_columns(df):
     """Encode list columns (host_verifications and amenities) using MultiLabelBinarizer."""
@@ -205,8 +207,8 @@ def encode_list_columns(df):
 
     return df
 
-
 def encode_categorical_columns(df):
+
     """One-hot encode categorical columns."""
     # Group rare property types into "Other"
     property_counts = df['property_type'].value_counts()
@@ -219,7 +221,6 @@ def encode_categorical_columns(df):
 
     return df
 
-
 def handle_outliers(df):
     """Handle outliers in night-related columns."""
     nights_cols = [
@@ -230,13 +231,11 @@ def handle_outliers(df):
         df.loc[df[col] > 365, col] = np.nan
     return df
 
-
 def prepare_final_dataset(df):
     """Keep only numeric fields and fill NaN values."""
     df = df.select_dtypes(include=[np.number])
     df = df.fillna(0)
     return df
-
 
 def split_and_save_data(df, version_name, split_ratio, seed, processed_data_path):
     """Split data into train/test sets and save to disk."""
@@ -270,8 +269,6 @@ def split_and_save_data(df, version_name, split_ratio, seed, processed_data_path
         filepath = f'{processed_data_path}{version_name}_{name}.csv'
         data.to_csv(filepath, index=False)
     logging.info(f"Saved split data to {processed_data_path}")
-
-
 
 def llm_sentiment_analysis(df):
 
@@ -572,6 +569,64 @@ def preprocess(raw_data_path=config.RAW_DATA_PATH,
     # Split and save
     split_and_save_data(airbnb, version_name, split_ratio, seed, processed_data_path)
 
+
+def save_data(df, version_name, name, processed_data_path): 
+    filepath = os.path.join(processed_data_path,f'{version_name}_{name}.csv')
+    df.to_csv(filepath, index=False)
+
+def preprocess_v2_wrapper(args):
+
+    df = load_raw_data(args.raw_data_path)
+    df = df.dropna(subset=['review_scores_rating'],axis=0)
+    df_types = ['X_train','X_test','y_train','y_test']
+
+    X = df.drop(['review_scores_rating', 'id'], axis=1)
+    y = df['review_scores_rating']
+    dfs = train_test_split(X,y,test_size=args.split_ratio,random_state=args.seed)
+
+    for name,df in zip(df_types,dfs):
+        
+        if 'X' in name:
+            df = preprocess_v2(df,args)
+            # print(len(df.columns))
+        save_data(df,args.version_name,name,args.processed_data_path)
+        
+def preprocess_v2(df,args):
+
+        # Remove duplicates
+    if args.drop_duplicate_rows:
+        df = remove_duplicates(df)
+        pass
+
+    # if sentiment_analysis:
+        # airbnb = llm_sentiment_analysis(airbnb)
+
+    # Handle missing values
+    if args.handle_missing_values:
+        df = impute_missing_values(df)
+        pass
+
+    # Handle column types
+    if args.handle_column_types:
+        df = convert_date_columns(df)
+        df = convert_boolean_columns(df)
+        df = convert_ordinal_columns(df)
+        df = convert_numeric_columns(df)
+        df = encode_list_columns(df)
+        df = encode_categorical_columns(df)
+        pass
+
+    # Handle outliers
+    if args.handle_outliers:
+        df = handle_outliers(df)
+        pass
+    # Prepare final dataset
+    # if not keep_raw:
+    df = prepare_final_dataset(df)
+    
+    return df
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--raw-data-path", type=str, default=config.RAW_DATA_PATH)
@@ -593,14 +648,23 @@ if __name__ == '__main__':
         asyncio.run(llm_sentiment_analysis_v2(df,args.processed_data_path))
         exit(0)
 
-    preprocess(raw_data_path=args.raw_data_path,
-                drop_duplicate_rows=args.drop_duplicate_rows,
-                # sentiment_analysis = args.llm_sentiment_analysis,
-                handle_column_types=args.handle_column_types,
-                handle_missing_values=args.handle_missing_values,
-                handle_outliers_flag=args.handle_outliers,
-                version_name=args.version_name,
-                split_ratio=args.split_ratio,
-                seed=args.seed,
-                processed_data_path=args.processed_data_path,
-                )
+    
+    ################################
+    # Preprocessing v2
+    ################################
+    preprocess_v2_wrapper(args)
+
+
+
+
+    # preprocess(raw_data_path=args.raw_data_path,
+    #             drop_duplicate_rows=args.drop_duplicate_rows,
+    #             # sentiment_analysis = args.llm_sentiment_analysis,
+    #             handle_column_types=args.handle_column_types,
+    #             handle_missing_values=args.handle_missing_values,
+    #             handle_outliers_flag=args.handle_outliers,
+    #             version_name=args.version_name,
+    #             split_ratio=args.split_ratio,
+    #             seed=args.seed,
+    #             processed_data_path=args.processed_data_path,
+    #             )
