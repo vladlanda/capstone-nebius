@@ -89,7 +89,6 @@ def main(args):
 
     # model = artifacts['model']
     # expected_features = artifacts['features']
-
     st.success("Model & Schema loaded successfully.")
 
     uploaded_file = st.file_uploader("Upload Raw AirBnB CSV", type=["csv"])
@@ -105,7 +104,9 @@ def main(args):
                 with st.spinner('Preprocessing and Predicting...'):
                     
                     # 1. Run preprocessing with CLI arguments
-                    processed_df = run_preprocess_pipeline(input_df.copy(), args)
+                    # processed_df = run_preprocess_pipeline(input_df.copy(), args)
+                    processed_df = preprocess.preprocess_v2(input_df.copy(), args)
+                    st.info(f"columns {len(processed_df.columns)}, {processed_df.columns}")
                     if processed_df is not None:
                         st.success("CSV format not aligned to the original schema.")
                     # if processed_df is not None:
