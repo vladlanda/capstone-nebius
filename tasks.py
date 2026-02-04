@@ -19,3 +19,11 @@ def xgboost_experiment(c):
         f'python experiments/xgboost_main.py'
     )
     c.run(cmd,pty=True)
+
+
+@task
+def train_xgboost(c):
+    cmd = (
+        f'python train.py --model xgboost'
+    )
+    c.run(cmd,pty=True)

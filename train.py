@@ -5,9 +5,11 @@ import joblib
 from pathlib import Path
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LinearRegression
+from sklearn.pipeline import Pipeline
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
 import wandb
 from config import config
+import joblib
 
 ## TODO hyperparameters: batch_size, learning_rate, epochs.
 config.BATCH_SIZE
@@ -26,10 +28,39 @@ def get_data(processed_data_path=config.PROCESSED_DATA_PATH,
         for data in datasets
     ]
 
-def train(version_name=config.VERSION_NAME,
+def get_model(model_name: str):
+    """
+    Returns a sklearn-compatible model based on CLI argument.
+    """
+
+    if model_name == "linear":
+        from sklearn.linear_model import LinearRegression
+        return LinearRegression()
+
+    elif model_name == "ridge":
+        from sklearn.linear_model import Ridge
+        return Ridge(alpha=1.0)
+
+    elif model_name == "random_forest":
+        from sklearn.ensemble import RandomForestRegressor
+        return RandomForestRegressor(n_estimators=200)
+
+    elif model_name == "xgboost":
+        from xgboost import XGBRegressor
+        return XGBRegressor(
+            n_estimators=300,
+            learning_rate=0.05,
+            max_depth=6
+        )
+
+    else:
+        raise ValueError(f"Unknown model: {model_name}")
+    
+def train(model_name = 'linear',version_name=config.VERSION_NAME,
             batch_size=config.BATCH_SIZE,
             learning_rate=config.LEARNING_RATE,
-            epochs=config.EPOCHS):
+            epochs=config.EPOCHS,
+            ):
 
     X_train, X_test, y_train, y_test = get_data()
 
@@ -38,10 +69,11 @@ def train(version_name=config.VERSION_NAME,
     # Initialize wandb
     wandb.login()
     run = wandb.init(
-        project="capstone",
-        name=f"{version_name}_linear_regression",
+        entity='asmazurik-company',
+        project=f"capstone_train_{model_name}",
+        name=f"{version_name}_{model_name}_regression",
         config={
-            "model": "linear regression (sklearn)",
+            "model": f"{model_name} regression (sklearn)",
             "version": version_name,
             "batch_size": batch_size,
             "learning_rate": learning_rate,
@@ -49,19 +81,31 @@ def train(version_name=config.VERSION_NAME,
         },
     )
 
+    pipeline_list = []
+
     # Scale features
     scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
+    model = get_model(model_name)
+
+    pipeline_list.append(('scaler',scaler))
+    pipeline_list.append(('model',model))
+    pipeline = Pipeline(pipeline_list)
+    
+    # X_train_scaled = scaler.fit_transform(X_train)
+    # X_test_scaled = scaler.transform(X_test)
 
     # Train model
     print("Training model...")
-    model = LinearRegression()
-    model.fit(X_train_scaled, y_train)
+    # model.fit(X_train_scaled, y_train)
+    pipeline.fit(X_train,y_train)
     
     # Predictions
-    y_train_pred = model.predict(X_train_scaled)
-    y_test_pred = model.predict(X_test_scaled)
+    # y_train_pred = model.predict(X_train_scaled)
+    # y_test_pred = model.predict(X_test_scaled)
+    
+    y_train_pred = pipeline.predict(X_train)
+    y_test_pred  = pipeline.predict(X_test)
+
 
     # Metrics
     train_mse = mean_squared_error(y_train, y_train_pred)
@@ -90,7 +134,7 @@ def train(version_name=config.VERSION_NAME,
     # Save model to /models
     model_dir = Path(config.MODEL_PATH)
     model_dir.mkdir(parents=True, exist_ok=True)
-    model_path = model_dir / f"{version_name}_linear_regression.joblib"
+    model_path = model_dir / f"{version_name}_{model_name}.joblib"
     joblib.dump(model, model_path)
     print(f"\nModel saved to: {model_path}")
 
@@ -104,7 +148,7 @@ def train(version_name=config.VERSION_NAME,
         'y_pred': y_train_pred.flatten(),
         'residual': y_train.values.flatten() - y_train_pred.flatten()
     })
-    train_results_path = results_dir / f"{version_name}_train_predictions.csv"
+    train_results_path = results_dir / f"{version_name}_{model_name}_train_predictions.csv"
     train_results.to_csv(train_results_path, index=False)
     print(f"Train predictions saved to: {train_results_path}")
     
@@ -114,7 +158,7 @@ def train(version_name=config.VERSION_NAME,
         'y_pred': y_test_pred.flatten(),
         'residual': y_test.values.flatten() - y_test_pred.flatten()
     })
-    test_results_path = results_dir / f"{version_name}_test_predictions.csv"
+    test_results_path = results_dir / f"{version_name}_{model_name}_test_predictions.csv"
     test_results.to_csv(test_results_path, index=False)
     print(f"Test predictions saved to: {test_results_path}")
     
@@ -124,22 +168,28 @@ def train(version_name=config.VERSION_NAME,
         'train': [train_rmse, train_mae, train_r2],
         'test': [test_rmse, test_mae, test_r2]
     })
-    metrics_path = results_dir / f"{version_name}_metrics.csv"
+    metrics_path = results_dir / f"{version_name}_{model_name}_metrics.csv"
     metrics_summary.to_csv(metrics_path, index=False)
     print(f"Metrics saved to: {metrics_path}")
 
     run.finish()
 
+
+
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Train linear regression model')
+    parser = argparse.ArgumentParser(description='Train a model')
     parser.add_argument("--version-name", type=str, default=config.VERSION_NAME)
     parser.add_argument("--batch-size", type=int, default=config.BATCH_SIZE)
     parser.add_argument("--learning-rate", type=float, default=config.LEARNING_RATE)
     parser.add_argument("--epochs", type=int, default=config.EPOCHS)
+
+    parser.add_argument("--model",type=str,default="linear",choices=["linear", "ridge", "random_forest", "xgboost"],help="Choose which model to train")
+
     
     args = parser.parse_args()
     
     train(
+        model_name=args.model,
         version_name=args.version_name,
         batch_size=args.batch_size,
         learning_rate=args.learning_rate,
