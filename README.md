@@ -1,6 +1,6 @@
 # 🏡 Airbnb Rating Prediction — Data Science Capstone (NEBIUS)
 
-This repository contains **Data Science Capstone Project** for the **NEBIUS Data Science Course**, built around the **Airbnb dataset**.  
+This repository contains **Data Science Capstone Project** for the **NEBIUS Data Science Course**, built around the **Airbnb dataset**.
 The project focuses on **Exploratory Data Analysis (EDA)** and **building a model to predict listing scores **, following **Python data science best practices**.
 
 ---
@@ -41,6 +41,11 @@ The project focuses on **Exploratory Data Analysis (EDA)** and **building a mode
 - uv venv
 - source .venv/bin/activate
 - uv pip install -r requirements.txt
+
+
+-- Training models
+- `invoke train-catboost-optuna` -- find best catboost hyperparams with optuna
+- `invoke train-catboost` -- train catboost model
 
 ---
 
