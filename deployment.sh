@@ -63,7 +63,8 @@ WorkingDirectory=${APP_DIR}
 
 ExecStart=${APP_DIR}/.venv/bin/python -m streamlit run ${APP_FILE} \
   --server.address 0.0.0.0 \
-  --server.port ${STREAMLIT_PORT}
+  --server.port ${STREAMLIT_PORT} \
+  -- --model xgboost --drop-duplicate-rows --handle-column-types --handle-missing-values --handle-outliers
 
 Restart=always
 RestartSec=3
