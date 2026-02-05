@@ -88,7 +88,7 @@ sudo tee $NGINX_CONF > /dev/null <<EOF
 server {
     listen ${PUBLIC_PORT};
     server_name _;
-
+    client_max_body_size 200M;
     location / {
         proxy_pass http://127.0.0.1:${STREAMLIT_PORT};
 
