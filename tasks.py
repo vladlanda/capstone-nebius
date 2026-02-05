@@ -28,14 +28,30 @@ def train_xgboost(c):
     )
     c.run(cmd,pty=True)
 
-@task 
+
+@task
+def train_catboost(c):
+    cmd = (
+        f'python train.py --model catboost'
+    )
+    c.run(cmd,pty=True)
+
+
+@task
+def train_catboost_optuna(c):
+    cmd = (
+        f'python train.py --model catboost --optuna'
+    )
+    c.run(cmd,pty=True)
+
+@task
 def preprocess(c):
     cmd = (
         f'python preprocess.py --drop-duplicate-rows --handle-column-types --handle-missing-values --handle-outliers'
     )
     c.run(cmd,pty=True)
 
-@task 
+@task
 def server(c):
     cmd = (
         f'streamlit run server.py -- --model xgboost --drop-duplicate-rows --handle-column-types --handle-missing-values --handle-outliers'

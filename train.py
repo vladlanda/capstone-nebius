@@ -7,7 +7,9 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LinearRegression
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
+from sklearn.model_selection import train_test_split
 import wandb
+import optuna
 from config import config
 import joblib
 
@@ -20,7 +22,7 @@ config.EPOCHS
 
 def get_data(processed_data_path=config.PROCESSED_DATA_PATH,
              version_name=config.VERSION_NAME):
-    
+
     datasets = ['X_train', 'X_test', 'y_train', 'y_test']
 
     return [
@@ -28,42 +30,168 @@ def get_data(processed_data_path=config.PROCESSED_DATA_PATH,
         for data in datasets
     ]
 
-def get_model(model_name: str):
+def _load_catboost_best_params():
+    params_path = Path(config.MODEL_PATH) / "catboost_best_params.json"
+    if params_path.exists():
+        import json
+        return json.loads(params_path.read_text())
+    return None
+
+
+def find_best_catboost_params(n_trials=5):
+    X_train, X_test, y_train, y_test = get_data()
+    base_params = _load_catboost_best_params()
+    if base_params is None:
+        base_params = {
+            "iterations": 800,
+            "learning_rate": 0.05,
+            "depth": 6,
+            "l2_leaf_reg": 3.0,
+            "subsample": 0.8,
+            "rsm": 0.8,
+        }
+
+    def _clamp(val, low, high):
+        return max(low, min(high, val))
+
+    def objective(trial):
+        from catboost import CatBoostRegressor
+
+        params = {
+            "iterations": trial.suggest_int(
+                "iterations",
+                _clamp(int(base_params["iterations"] * 0.7), 300, 1500),
+                _clamp(int(base_params["iterations"] * 1.3), 300, 1500),
+            ),
+            "learning_rate": trial.suggest_float(
+                "learning_rate",
+                _clamp(base_params["learning_rate"] * 0.7, 0.01, 0.1),
+                _clamp(base_params["learning_rate"] * 1.3, 0.01, 0.1),
+            ),
+            "depth": trial.suggest_int(
+                "depth",
+                _clamp(base_params["depth"] - 2, 4, 10),
+                _clamp(base_params["depth"] + 2, 4, 10),
+            ),
+            "l2_leaf_reg": trial.suggest_float(
+                "l2_leaf_reg",
+                _clamp(base_params["l2_leaf_reg"] * 0.5, 1.0, 10.0),
+                _clamp(base_params["l2_leaf_reg"] * 2.0, 1.0, 10.0),
+            ),
+            "subsample": trial.suggest_float(
+                "subsample",
+                _clamp(base_params["subsample"] * 0.8, 0.6, 1.0),
+                _clamp(base_params["subsample"] * 1.2, 0.6, 1.0),
+            ),
+            "rsm": trial.suggest_float(
+                "rsm",
+                _clamp(base_params["rsm"] * 0.8, 0.5, 1.0),
+                _clamp(base_params["rsm"] * 1.2, 0.5, 1.0),
+            ),
+            "loss_function": "RMSE",
+            "verbose": False,
+            "random_seed": 42,
+        }
+
+        cb = CatBoostRegressor(**params)
+        cb.fit(X_train, y_train.values.ravel())
+
+        test_pred = cb.predict(X_test)
+        test_rmse = np.sqrt(mean_squared_error(y_test, test_pred))
+        return test_rmse
+
+    study = optuna.create_study(direction="minimize")
+    study.optimize(objective, n_trials=n_trials)
+
+    best_params = study.best_params
+
+    params_path = Path(config.MODEL_PATH) / "catboost_best_params.json"
+    Path(config.MODEL_PATH).mkdir(parents=True, exist_ok=True)
+    import json
+    params_path.write_text(json.dumps(best_params, indent=2))
+
+    return None
+
+
+def _build_pipeline(model, use_scaler=True):
+    steps = []
+    if use_scaler:
+        steps.append(("scaler", StandardScaler()))
+    steps.append(("model", model))
+    return Pipeline(steps)
+
+
+def load_linear_model():
+    from sklearn.linear_model import LinearRegression
+    return _build_pipeline(LinearRegression())
+
+
+def load_ridge_model():
+    from sklearn.linear_model import Ridge
+    return _build_pipeline(Ridge(alpha=1.0))
+
+
+def load_random_forest_model():
+    from sklearn.ensemble import RandomForestRegressor
+    return _build_pipeline(RandomForestRegressor(n_estimators=200))
+
+
+def load_xgboost_model():
+    from xgboost import XGBRegressor
+    model = XGBRegressor(
+        n_estimators=300,
+        learning_rate=0.05,
+        max_depth=6,
+    )
+    return _build_pipeline(model)
+
+
+def load_catboost_model():
+    from catboost import CatBoostRegressor
+    catboost_params = _load_catboost_best_params()
+    if catboost_params is None:
+        raise ValueError("catboost_best_params.json not found; run Optuna tuning first")
+    return CatBoostRegressor(
+        **catboost_params,
+        loss_function="RMSE",
+        verbose=False,
+        random_seed=42,
+    )
+
+
+def get_pipeline(model_name: str):
     """
-    Returns a sklearn-compatible model based on CLI argument.
+    Returns a full pipeline based on CLI argument.
     """
 
     if model_name == "linear":
-        from sklearn.linear_model import LinearRegression
-        return LinearRegression()
+        return load_linear_model()
 
-    elif model_name == "ridge":
-        from sklearn.linear_model import Ridge
-        return Ridge(alpha=1.0)
+    if model_name == "ridge":
+        return load_ridge_model()
 
-    elif model_name == "random_forest":
-        from sklearn.ensemble import RandomForestRegressor
-        return RandomForestRegressor(n_estimators=200)
+    if model_name == "random_forest":
+        return load_random_forest_model()
 
-    elif model_name == "xgboost":
-        from xgboost import XGBRegressor
-        return XGBRegressor(
-            n_estimators=300,
-            learning_rate=0.05,
-            max_depth=6
-        )
+    if model_name == "xgboost":
+        return load_xgboost_model()
 
-    else:
-        raise ValueError(f"Unknown model: {model_name}")
-    
-def train(model_name = 'linear',version_name=config.VERSION_NAME,
-            batch_size=config.BATCH_SIZE,
-            learning_rate=config.LEARNING_RATE,
-            epochs=config.EPOCHS,
-            ):
+    if model_name == "catboost":
+        return load_catboost_model()
+
+    raise ValueError(f"Unknown model: {model_name}")
+
+def train(
+    model_name="linear",
+    version_name=config.VERSION_NAME,
+    batch_size=config.BATCH_SIZE,
+    learning_rate=config.LEARNING_RATE,
+    epochs=config.EPOCHS,
+    use_optuna=False,
+):
 
     X_train, X_test, y_train, y_test = get_data()
-    
+
     # Save schema for inference alignment
     import json
     schema_path = Path(config.MODEL_PATH) / f"{version_name}_{model_name}_schema.json"
@@ -71,7 +199,7 @@ def train(model_name = 'linear',version_name=config.VERSION_NAME,
     schema = {"columns": list(X_train.columns)}
     schema_path.write_text(json.dumps(schema, indent=2))
     print(f"Saved schema: {schema_path} with {len(schema['columns'])} columns")
-    
+
     print(f"X_train shape: {X_train.shape}, y_train shape: {y_train.shape}")
     print(f"X_test shape: {X_test.shape}, y_test shape: {y_test.shape}")
     print(f"Training with version: {version_name}")
@@ -91,30 +219,18 @@ def train(model_name = 'linear',version_name=config.VERSION_NAME,
         },
     )
 
-    pipeline_list = []
 
-    # Scale features
-    scaler = StandardScaler()
-    model = get_model(model_name)
+    if model_name == 'catboost' and use_optuna:
+        print("Using Optuna to find best CatBoost parameters...")
+        find_best_catboost_params(n_trials=10)
 
-    pipeline_list.append(('scaler',scaler))
-    pipeline_list.append(('model',model))
-    pipeline = Pipeline(pipeline_list)
-    
-    # X_train_scaled = scaler.fit_transform(X_train)
-    # X_test_scaled = scaler.transform(X_test)
-
-    # Train model
     print("Training model...")
-    # model.fit(X_train_scaled, y_train)
+    pipeline = get_pipeline(model_name)
     pipeline.fit(X_train,y_train)
-    
-    # Predictions
-    # y_train_pred = model.predict(X_train_scaled)
-    # y_test_pred = model.predict(X_test_scaled)
-    
+
     y_train_pred = pipeline.predict(X_train)
     y_test_pred  = pipeline.predict(X_test)
+    model_to_save = pipeline
 
 
     # Metrics
@@ -122,7 +238,7 @@ def train(model_name = 'linear',version_name=config.VERSION_NAME,
     train_rmse = np.sqrt(train_mse)
     train_mae = mean_absolute_error(y_train, y_train_pred)
     train_r2 = r2_score(y_train, y_train_pred)
-    
+
     test_mse = mean_squared_error(y_test, y_test_pred)
     test_rmse = np.sqrt(test_mse)
     test_mae = mean_absolute_error(y_test, y_test_pred)
@@ -131,7 +247,7 @@ def train(model_name = 'linear',version_name=config.VERSION_NAME,
     # Log metrics
     print(f"\nTrain Metrics - RMSE: {train_rmse:.4f}, MAE: {train_mae:.4f}, R2: {train_r2:.4f}")
     print(f"Test Metrics - RMSE: {test_rmse:.4f}, MAE: {test_mae:.4f}, R2: {test_r2:.4f}")
-    
+
     run.log({
         "train_rmse": train_rmse,
         "train_mae": train_mae,
@@ -145,13 +261,13 @@ def train(model_name = 'linear',version_name=config.VERSION_NAME,
     model_dir = Path(config.MODEL_PATH)
     model_dir.mkdir(parents=True, exist_ok=True)
     model_path = model_dir / f"{version_name}_{model_name}.joblib"
-    joblib.dump(pipeline, model_path)
+    joblib.dump(model_to_save, model_path)
     print(f"\nPipeline saved to: {model_path}")
 
     # Save predictions to /results
     results_dir = Path(config.RESULTS_PATH)
     results_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Save train predictions
     train_results = pd.DataFrame({
         'y_true': y_train.values.flatten(),
@@ -161,7 +277,7 @@ def train(model_name = 'linear',version_name=config.VERSION_NAME,
     train_results_path = results_dir / f"{version_name}_{model_name}_train_predictions.csv"
     train_results.to_csv(train_results_path, index=False)
     print(f"Train predictions saved to: {train_results_path}")
-    
+
     # Save test predictions
     test_results = pd.DataFrame({
         'y_true': y_test.values.flatten(),
@@ -171,7 +287,7 @@ def train(model_name = 'linear',version_name=config.VERSION_NAME,
     test_results_path = results_dir / f"{version_name}_{model_name}_test_predictions.csv"
     test_results.to_csv(test_results_path, index=False)
     print(f"Test predictions saved to: {test_results_path}")
-    
+
     # Save metrics summary
     metrics_summary = pd.DataFrame({
         'metric': ['rmse', 'mae', 'r2'],
@@ -193,15 +309,25 @@ if __name__ == '__main__':
     parser.add_argument("--learning-rate", type=float, default=config.LEARNING_RATE)
     parser.add_argument("--epochs", type=int, default=config.EPOCHS)
 
-    parser.add_argument("--model",type=str,default="linear",choices=["linear", "ridge", "random_forest", "xgboost"],help="Choose which model to train")
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="linear",
+        choices=["linear", "ridge", "random_forest", "xgboost", "catboost"],
+        help="Choose which model to train",
+    )
+    parser.add_argument(
+        "--optuna", action="store_true", help="Enable Optuna tuning for CatBoost"
+    )
 
-    
+
     args = parser.parse_args()
-    
+
     train(
         model_name=args.model,
         version_name=args.version_name,
         batch_size=args.batch_size,
         learning_rate=args.learning_rate,
-        epochs=args.epochs
+        epochs=args.epochs,
+        use_optuna=args.optuna
     )
