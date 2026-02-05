@@ -79,7 +79,7 @@ def impute_missing_values(df):
     bathrooms_extracted = (df["bathrooms_text"]
         .str.extract(r"(\d+\.?\d*)")
         .astype(float)[0])
-    df["bathrooms"] = df["bathrooms"].fillna(bathrooms_extracted)
+    df.loc[:,"bathrooms"] = df.loc[:,"bathrooms"].fillna(bathrooms_extracted)
     df = df.drop('bathrooms_text', axis=1)
 
     logging.info(f"After handling missing values: {df.shape}")
