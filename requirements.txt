@@ -25,6 +25,8 @@ python-dotenv>=1.0.0
 joblib>=1.3.0
 
 xgboost
+optuna
+catboost
 openai
 streamlit
 watchdog
