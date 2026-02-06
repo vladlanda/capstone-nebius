@@ -12,6 +12,8 @@ USER_NAME="$(whoami)"
 
 STREAMLIT_PORT="8501"
 PUBLIC_PORT="80"
+
+SERVER_MAX_UPLOAD_FILE_MB="1000"
 # ==============================
 
 echo "🚀 Deploying Streamlit with uv + systemd + Nginx..."
@@ -64,7 +66,8 @@ WorkingDirectory=${APP_DIR}
 ExecStart=${APP_DIR}/.venv/bin/python -m streamlit run ${APP_FILE} \
   --server.address 0.0.0.0 \
   --server.port ${STREAMLIT_PORT} \
-  -- --model xgboost --drop-duplicate-rows --handle-column-types --handle-missing-values --handle-outliers
+  --server.maxUploadSize ${SERVER_MAX_UPLOAD_FILE_MB} \
+  -- --model xgboost --handle-column-types --handle-missing-values --handle-outliers
 
 Restart=always
 RestartSec=3
@@ -89,7 +92,7 @@ sudo tee $NGINX_CONF > /dev/null <<EOF
 server {
     listen ${PUBLIC_PORT};
     server_name _;
-    client_max_body_size 200M;
+    client_max_body_size ${SERVER_MAX_UPLOAD_FILE_MB}M;
     location / {
         proxy_pass http://127.0.0.1:${STREAMLIT_PORT};
 
