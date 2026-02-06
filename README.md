@@ -44,7 +44,11 @@ The project focuses on **Exploratory Data Analysis (EDA)** and **building a mode
 - uv pip install -r requirements.txt
 
 ### Windows:
-pip install uv
+- pip install uv
+- uv python install 3.11
+- uv venv
+- .venv\Scripts\activate
+
 
 ---
 
