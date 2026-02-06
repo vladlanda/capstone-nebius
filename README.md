@@ -36,11 +36,18 @@ The project focuses on **Exploratory Data Analysis (EDA)** and **building a mode
 
 ## Instruction (uv)
 
+### Linux/macOS:
 - curl -LsSf https://astral.sh/uv/install.sh | sh (linux/macos)
 - uv python install 3.11
 - uv venv
 - source .venv/bin/activate
 - uv pip install -r requirements.txt
+
+### Windows:
+- pip install uv
+- uv python install 3.11
+- uv venv
+- .venv\Scripts\activate
 
 
 -- Training models
