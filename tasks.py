@@ -13,41 +13,9 @@ def preprocess_sentiment_analysis_keep_raw(c,preprocess_args = None):
 
 
 @task
-def xgboost_experiment(c):
-
-    cmd = (
-        f'python experiments/xgboost_main.py'
-    )
-    c.run(cmd,pty=True)
-
-
-@task
-def train_xgboost(c):
-    cmd = (
-        f'python train.py --model xgboost'
-    )
-    c.run(cmd,pty=True)
-
-
-@task
-def train_catboost(c):
-    cmd = (
-        f'python train.py --model catboost'
-    )
-    c.run(cmd,pty=True)
-
-@task
 def train(c):
     cmd = (
         f'python train.py'
-    )
-    c.run(cmd,pty=True)
-
-
-@task
-def train_catboost_optuna(c):
-    cmd = (
-        f'python train.py --model catboost --optuna'
     )
     c.run(cmd,pty=True)
 

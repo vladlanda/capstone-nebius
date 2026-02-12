@@ -3,70 +3,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, RegressorMixin
-from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 from config import config
-
-
-def load_catboost_best_params():
-    params_path = Path(config.MODEL_PATH) / "catboost_best_params.json"
-    if params_path.exists():
-        import json
-
-        return json.loads(params_path.read_text())
-    return None
-
-
-def _build_pipeline(model, use_scaler=True):
-    steps = []
-    if use_scaler:
-        steps.append(("scaler", StandardScaler()))
-    steps.append(("model", model))
-    return Pipeline(steps)
-
-
-def load_linear_model():
-    from sklearn.linear_model import LinearRegression
-
-    return _build_pipeline(LinearRegression())
-
-
-def load_ridge_model():
-    from sklearn.linear_model import Ridge
-
-    return _build_pipeline(Ridge(alpha=1.0))
-
-
-def load_random_forest_model():
-    from sklearn.ensemble import RandomForestRegressor
-
-    return _build_pipeline(RandomForestRegressor(n_estimators=200))
-
-
-def load_xgboost_model():
-    from xgboost import XGBRegressor
-
-    model = XGBRegressor(
-        n_estimators=300,
-        learning_rate=0.05,
-        max_depth=6,
-    )
-    return _build_pipeline(model)
-
-
-def load_catboost_model():
-    from catboost import CatBoostRegressor
-
-    catboost_params = load_catboost_best_params()
-    if catboost_params is None:
-        raise ValueError("catboost_best_params.json not found; run Optuna tuning first")
-    return CatBoostRegressor(
-        **catboost_params,
-        loss_function="RMSE",
-        verbose=False,
-        random_seed=42,
-    )
 
 
 class MixtureOfExpertsRegressor(BaseEstimator, RegressorMixin):
@@ -159,119 +98,48 @@ class MixtureOfExpertsPipeline(BaseEstimator, RegressorMixin):
         return self.moe_model.predict(X_scaled)
 
 
-def get_classifier(classifier_name: str, **hyperparams):
-    random_state = hyperparams.get("random_state", 42)
-
-    if classifier_name == "logistic":
-        from sklearn.linear_model import LogisticRegression
-
-        return LogisticRegression(random_state=random_state, max_iter=1000)
-
-    if classifier_name == "xgboost":
-        from xgboost import XGBClassifier
-
-        return XGBClassifier(
-            n_estimators=hyperparams.get("clf_n_estimators", 100),
-            learning_rate=hyperparams.get("clf_learning_rate", 0.1),
-            max_depth=hyperparams.get("clf_max_depth", 3),
-            random_state=random_state,
-            n_jobs=-1,
-        )
-
-    if classifier_name == "lightgbm":
-        try:
-            from lightgbm import LGBMClassifier
-        except ImportError as exc:
-            raise ImportError("LightGBM is not installed. Install it with: pip install lightgbm") from exc
-
-        return LGBMClassifier(
-            n_estimators=hyperparams.get("clf_n_estimators", 100),
-            learning_rate=hyperparams.get("clf_learning_rate", 0.1),
-            max_depth=hyperparams.get("clf_max_depth", 3),
-            random_state=random_state,
-            n_jobs=-1,
-            verbose=-1,
-        )
-
-    if classifier_name == "random_forest":
-        from sklearn.ensemble import RandomForestClassifier
-
-        return RandomForestClassifier(
-            n_estimators=hyperparams.get("clf_n_estimators", 100),
-            max_depth=hyperparams.get("clf_max_depth", None),
-            random_state=random_state,
-            n_jobs=-1,
-        )
-
-    raise ValueError(f"Unknown classifier: {classifier_name}")
+def _default_moe_params():
+    return {
+        "threshold_method": "percentile",
+        "threshold_percentile": 20,
+        "threshold_value": 90,
+        "use_soft_gate": True,
+        "target_min": 0,
+        "target_max": 5,
+        "classifier_params": {
+            "iterations": 300,
+            "learning_rate": 0.1,
+            "depth": 6,
+            "loss_function": "Logloss",
+            "random_seed": 42,
+        },
+        "regressor_params": {
+            "iterations": 800,
+            "learning_rate": 0.05,
+            "depth": 6,
+            "l2_leaf_reg": 3.0,
+            "subsample": 0.8,
+            "rsm": 0.8,
+            "random_seed": 42,
+        },
+    }
 
 
-def get_regressor(regressor_name: str, **hyperparams):
-    random_state = hyperparams.get("random_state", 42)
+def _load_best_params():
+    params_path = Path(config.MODEL_PATH) / "best_params.json"
+    if params_path.exists():
+        import json
 
-    if regressor_name == "linear":
-        from sklearn.linear_model import LinearRegression
+        return json.loads(params_path.read_text())
+    return None
 
-        return LinearRegression()
 
-    if regressor_name == "ridge":
-        from sklearn.linear_model import Ridge
+def _write_best_params(params):
+    params_path = Path(config.MODEL_PATH) / "best_params.json"
+    Path(config.MODEL_PATH).mkdir(parents=True, exist_ok=True)
+    import json
 
-        return Ridge(alpha=hyperparams.get("reg_alpha", 1.0))
-
-    if regressor_name == "lasso":
-        from sklearn.linear_model import Lasso
-
-        return Lasso(alpha=hyperparams.get("reg_alpha", 1.0), max_iter=10000)
-
-    if regressor_name == "random_forest":
-        from sklearn.ensemble import RandomForestRegressor
-
-        return RandomForestRegressor(
-            n_estimators=hyperparams.get("reg_n_estimators", 200),
-            max_depth=hyperparams.get("reg_max_depth", None),
-            min_samples_split=hyperparams.get("reg_min_samples_split", 2),
-            random_state=random_state,
-            n_jobs=-1,
-        )
-
-    if regressor_name == "xgboost":
-        from xgboost import XGBRegressor
-
-        return XGBRegressor(
-            n_estimators=hyperparams.get("reg_n_estimators", 300),
-            learning_rate=hyperparams.get("reg_learning_rate", 0.05),
-            max_depth=hyperparams.get("reg_max_depth", 6),
-            random_state=random_state,
-            n_jobs=-1,
-        )
-
-    if regressor_name == "lightgbm":
-        try:
-            from lightgbm import LGBMRegressor
-        except ImportError as exc:
-            raise ImportError("LightGBM is not installed. Install it with: pip install lightgbm") from exc
-
-        return LGBMRegressor(
-            n_estimators=hyperparams.get("reg_n_estimators", 300),
-            learning_rate=hyperparams.get("reg_learning_rate", 0.05),
-            max_depth=hyperparams.get("reg_max_depth", 6),
-            random_state=random_state,
-            n_jobs=-1,
-            verbose=-1,
-        )
-
-    if regressor_name == "gradient_boosting":
-        from sklearn.ensemble import GradientBoostingRegressor
-
-        return GradientBoostingRegressor(
-            n_estimators=hyperparams.get("reg_n_estimators", 200),
-            learning_rate=hyperparams.get("reg_learning_rate", 0.1),
-            max_depth=hyperparams.get("reg_max_depth", 3),
-            random_state=random_state,
-        )
-
-    raise ValueError(f"Unknown regressor: {regressor_name}")
+    params_path.write_text(json.dumps(params, indent=2))
 
 
 def calculate_threshold(y_train, method="median", percentile=50, fixed_value=90):
@@ -291,55 +159,45 @@ def calculate_threshold(y_train, method="median", percentile=50, fixed_value=90)
     raise ValueError(f"Unknown threshold method: {method}")
 
 
-def load_mixture_of_experts_model(
-    y_train,
-    classifier_name="xgboost",
-    regressor_name="xgboost",
-    threshold_method="median",
-    threshold_percentile=50,
-    threshold_value=90,
-    use_soft_gate=True,
-    target_min=0,
-    target_max=5,
-    **hyperparams,
-):
+def load_mixture_of_experts_model(y_train):
+    from catboost import CatBoostClassifier, CatBoostRegressor
+
+    params = _load_best_params()
+    if params is None:
+        params = _default_moe_params()
+        _write_best_params(params)
+
     threshold = calculate_threshold(
         y_train,
-        method=threshold_method,
-        percentile=threshold_percentile,
-        fixed_value=threshold_value,
+        method=params["threshold_method"],
+        percentile=params["threshold_percentile"],
+        fixed_value=params["threshold_value"],
     )
-    classifier = get_classifier(classifier_name, **hyperparams)
-    regressor_low = get_regressor(regressor_name, **hyperparams)
-    regressor_high = get_regressor(regressor_name, **hyperparams)
+    classifier = CatBoostClassifier(
+        **params["classifier_params"],
+        verbose=False,
+    )
+    regressor_low = CatBoostRegressor(
+        **params["regressor_params"],
+        loss_function="RMSE",
+        verbose=False,
+    )
+    regressor_high = CatBoostRegressor(
+        **params["regressor_params"],
+        loss_function="RMSE",
+        verbose=False,
+    )
 
     moe = MixtureOfExpertsRegressor(
         classifier=classifier,
         regressor_low=regressor_low,
         regressor_high=regressor_high,
         threshold=threshold,
-        use_soft_gate=use_soft_gate,
-        target_min=target_min,
-        target_max=target_max,
+        use_soft_gate=params["use_soft_gate"],
+        target_min=params["target_min"],
+        target_max=params["target_max"],
     )
 
     return MixtureOfExpertsPipeline(moe)
-
-
-def get_pipeline(model_name: str):
-    if model_name == "linear":
-        return load_linear_model()
-
-    if model_name == "ridge":
-        return load_ridge_model()
-
-    if model_name == "random_forest":
-        return load_random_forest_model()
-
-    if model_name == "xgboost":
-        return load_xgboost_model()
-
-    if model_name == "catboost":
-        return load_catboost_model()
 
     raise ValueError(f"Unknown model: {model_name}")

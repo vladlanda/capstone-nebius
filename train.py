@@ -3,8 +3,7 @@ import pandas as pd
 import joblib
 from pathlib import Path
 from config import config
-from training.model import get_pipeline, load_mixture_of_experts_model
-from training.hyperparameters_tuning import find_best_catboost_params
+from training.model import load_mixture_of_experts_model
 from training.metrics import compute_metrics, save_metrics_summary
 from training.prediction import save_predictions
 from training.wandb import init_wandb_run
@@ -40,13 +39,12 @@ def save_model(model, version_name, model_name):
     return model_path
 
 def train(
-    model_name="moe",
     version_name=config.VERSION_NAME,
-    use_optuna=False,
 ):
 
     X_train, X_test, y_train, y_test = get_data()
 
+    model_name = "moe"
     save_schema(X_train, version_name, model_name)
 
     print(f"X_train shape: {X_train.shape}, y_train shape: {y_train.shape}")
@@ -54,14 +52,7 @@ def train(
 
     run = init_wandb_run(model_name, version_name)
 
-    if model_name == 'catboost' and use_optuna:
-        print("Using Optuna to find best CatBoost parameters...")
-        find_best_catboost_params(get_data, n_trials=10)
-
-    if model_name == "moe":
-        pipeline = load_mixture_of_experts_model(y_train)
-    else:
-        pipeline = get_pipeline(model_name)
+    pipeline = load_mixture_of_experts_model(y_train)
     print("Training model...")
     pipeline.fit(X_train,y_train)
     print("Saving model...")
@@ -83,17 +74,6 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Train a model')
     parser.add_argument("--version-name", type=str, default=config.VERSION_NAME)
 
-    parser.add_argument(
-        "--model",
-        type=str,
-        default="moe",
-        choices=["moe", "linear", "ridge", "random_forest", "xgboost", "catboost"],
-        help="Choose which model to train",
-    )
-    parser.add_argument(
-        "--optuna", action="store_true", help="Enable Optuna tuning for CatBoost"
-    )
-
     return parser.parse_args()
 
 
@@ -101,9 +81,7 @@ def main():
     args = parse_args()
 
     train(
-        model_name=args.model,
         version_name=args.version_name,
-        use_optuna=args.optuna
     )
 
 
