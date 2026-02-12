@@ -1,13 +1,13 @@
 import argparse
 import pandas as pd
-import numpy as np
 import joblib
 from pathlib import Path
-from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
-import wandb
 from config import config
 from training.model import get_pipeline
 from training.hyperparameters_tuning import find_best_catboost_params
+from training.metrics import compute_metrics, save_metrics_summary
+from training.prediction import save_predictions
+from training.wandb import init_wandb_run
 
 def get_data(processed_data_path=config.PROCESSED_DATA_PATH,
              version_name=config.VERSION_NAME):
@@ -31,54 +31,6 @@ def save_schema(X_train, version_name, model_name):
     return schema_path
 
 
-def init_wandb_run(model_name, version_name, batch_size, learning_rate, epochs):
-    wandb.login()
-    return wandb.init(
-        entity='asmazurik-company',
-        project=f"capstone_train_{model_name}",
-        name=f"{version_name}_{model_name}_regression",
-        config={
-            "model": f"{model_name} regression (sklearn)",
-            "version": version_name,
-            "batch_size": batch_size,
-            "learning_rate": learning_rate,
-            "epochs": epochs,
-        },
-    )
-
-
-def compute_metrics(y_train, y_train_pred, y_test, y_test_pred):
-    train_mse = mean_squared_error(y_train, y_train_pred)
-    train_rmse = np.sqrt(train_mse)
-    train_mae = mean_absolute_error(y_train, y_train_pred)
-    train_r2 = r2_score(y_train, y_train_pred)
-
-    test_mse = mean_squared_error(y_test, y_test_pred)
-    test_rmse = np.sqrt(test_mse)
-    test_mae = mean_absolute_error(y_test, y_test_pred)
-    test_r2 = r2_score(y_test, y_test_pred)
-
-    print(
-        f"\nTrain Metrics - RMSE: {train_rmse:.4f}, MAE: {train_mae:.4f}, R2: {train_r2:.4f}"
-    )
-    print(
-        f"Test Metrics - RMSE: {test_rmse:.4f}, MAE: {test_mae:.4f}, R2: {test_r2:.4f}"
-    )
-
-    return {
-        "train_rmse": train_rmse,
-        "train_mae": train_mae,
-        "train_r2": train_r2,
-        "test_rmse": test_rmse,
-        "test_mae": test_mae,
-        "test_r2": test_r2,
-    }
-
-
-def log_metrics(run, metrics):
-    run.log(metrics)
-
-
 def save_model(model, version_name, model_name):
     model_dir = Path(config.MODEL_PATH)
     model_dir.mkdir(parents=True, exist_ok=True)
@@ -86,49 +38,6 @@ def save_model(model, version_name, model_name):
     joblib.dump(model, model_path)
     print(f"\nPipeline saved to: {model_path}")
     return model_path
-
-
-def _get_results_dir():
-    results_dir = Path(config.RESULTS_PATH)
-    results_dir.mkdir(parents=True, exist_ok=True)
-    return results_dir
-
-
-def save_predictions(y_train, y_train_pred, y_test, y_test_pred, version_name, model_name):
-    results_dir = _get_results_dir()
-
-    train_results = pd.DataFrame({
-        'y_true': y_train.values.flatten(),
-        'y_pred': y_train_pred.flatten(),
-        'residual': y_train.values.flatten() - y_train_pred.flatten()
-    })
-    train_results_path = results_dir / f"{version_name}_{model_name}_train_predictions.csv"
-    train_results.to_csv(train_results_path, index=False)
-    print(f"Train predictions saved to: {train_results_path}")
-
-    test_results = pd.DataFrame({
-        'y_true': y_test.values.flatten(),
-        'y_pred': y_test_pred.flatten(),
-        'residual': y_test.values.flatten() - y_test_pred.flatten()
-    })
-    test_results_path = results_dir / f"{version_name}_{model_name}_test_predictions.csv"
-    test_results.to_csv(test_results_path, index=False)
-    print(f"Test predictions saved to: {test_results_path}")
-
-    return train_results_path, test_results_path
-
-
-def save_metrics_summary(metrics, version_name, model_name):
-    results_dir = _get_results_dir()
-    metrics_summary = pd.DataFrame({
-        'metric': ['rmse', 'mae', 'r2'],
-        'train': [metrics["train_rmse"], metrics["train_mae"], metrics["train_r2"]],
-        'test': [metrics["test_rmse"], metrics["test_mae"], metrics["test_r2"]]
-    })
-    metrics_path = results_dir / f"{version_name}_{model_name}_metrics.csv"
-    metrics_summary.to_csv(metrics_path, index=False)
-    print(f"Metrics saved to: {metrics_path}")
-    return metrics_path
 
 def train(
     model_name="linear",
@@ -152,8 +61,8 @@ def train(
         print("Using Optuna to find best CatBoost parameters...")
         find_best_catboost_params(get_data, n_trials=10)
 
-    print("Training model...")
     pipeline = get_pipeline(model_name)
+    print("Training model...")
     pipeline.fit(X_train,y_train)
     print("Saving model...")
     save_model(pipeline, version_name, model_name)
@@ -164,7 +73,7 @@ def train(
     save_predictions(y_train, y_train_pred, y_test, y_test_pred, version_name, model_name)
 
     metrics = compute_metrics(y_train, y_train_pred, y_test, y_test_pred)
-    log_metrics(run, metrics)
+    run.log(metrics)
     save_metrics_summary(metrics, version_name, model_name)
 
     run.finish()
