@@ -3,7 +3,7 @@ import pandas as pd
 import joblib
 from pathlib import Path
 from config import config
-from training.model import get_pipeline
+from training.model import get_pipeline, load_mixture_of_experts_model
 from training.hyperparameters_tuning import find_best_catboost_params
 from training.metrics import compute_metrics, save_metrics_summary
 from training.prediction import save_predictions
@@ -40,7 +40,7 @@ def save_model(model, version_name, model_name):
     return model_path
 
 def train(
-    model_name="linear",
+    model_name="moe",
     version_name=config.VERSION_NAME,
     use_optuna=False,
 ):
@@ -58,7 +58,10 @@ def train(
         print("Using Optuna to find best CatBoost parameters...")
         find_best_catboost_params(get_data, n_trials=10)
 
-    pipeline = get_pipeline(model_name)
+    if model_name == "moe":
+        pipeline = load_mixture_of_experts_model(y_train)
+    else:
+        pipeline = get_pipeline(model_name)
     print("Training model...")
     pipeline.fit(X_train,y_train)
     print("Saving model...")
@@ -83,8 +86,8 @@ def parse_args():
     parser.add_argument(
         "--model",
         type=str,
-        default="linear",
-        choices=["linear", "ridge", "random_forest", "xgboost", "catboost"],
+        default="moe",
+        choices=["moe", "linear", "ridge", "random_forest", "xgboost", "catboost"],
         help="Choose which model to train",
     )
     parser.add_argument(

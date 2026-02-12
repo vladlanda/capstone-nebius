@@ -39,7 +39,7 @@ def train_catboost(c):
 @task
 def train(c):
     cmd = (
-        f'python train.py --model catboost'
+        f'python train.py'
     )
     c.run(cmd,pty=True)
 
