@@ -39,11 +39,11 @@ def load_raw_data(raw_data_path):
 
     # for csv,df in zip(csv_files,dfs):
     #     df['city'] = os.path.basename(csv).split('.')[0]
-    
+
     # la['city'] = "Los Angeles"
     # ny['city'] = "New York"
     # airbnb = pd.concat([la, ny], axis=0).reset_index(drop=True).reset_index(names='id')
-    if len(dfs) > 1: 
+    if len(dfs) > 1:
         airbnb = pd.concat(dfs, axis=0).reset_index(drop=True).reset_index(names='id')
     else:
         airbnb = dfs[0]
@@ -73,7 +73,7 @@ def impute_missing_values(df):
 
     # Drop rows with missing target values
     # df = df.dropna(subset=['first_review', 'last_review', 'review_scores_rating'], how='any')
-    df = df.dropna(subset=['first_review', 'last_review'], how='any')
+    # df = df.dropna(subset=['first_review', 'last_review'], how='any')
 
     # Extract bathrooms from bathrooms_text
     bathrooms_extracted = (df["bathrooms_text"]
@@ -280,7 +280,7 @@ def llm_sentiment_analysis(df):
         base_url="https://api.tokenfactory.nebius.com/v1/",
 
     )
-    
+
     SYSTEM_PROMPT = """You are an expert analyst of guest perception for rental listings.
 
                     For EACH listing, estimate how EACH text field would independently influence
@@ -295,7 +295,7 @@ def llm_sentiment_analysis(df):
 
                     Return valid JSON only.
                     """
-    
+
     def build_batch_prompt(rows):
         blocks = []
 
@@ -349,7 +349,7 @@ def llm_sentiment_analysis(df):
 
         content = response.choices[0].message.content
         return json.loads(content)  # list of dicts
-    
+
     def chunk_df(df, batch_size):
         for start in range(0, len(df), batch_size):
             yield df.iloc[start:start + batch_size]
@@ -366,7 +366,7 @@ def llm_sentiment_analysis(df):
 
     scores_df = pd.DataFrame(results, index=df_tmp.index)
     df_tmp = pd.concat([df_tmp, scores_df], axis=1)
-    
+
 
     # df = pd.concat([df, scores_df], axis=1)
     logging.info(df_tmp.head())
@@ -392,10 +392,10 @@ async def llm_sentiment_analysis_v2(df,processed_data_path):
         CONFIG_TEXT_COLUMNS = ['description']
 
     async def async_llm_analysis(
-        input_df, 
-        text_columns=None, 
-        batch_size=None, 
-        concurrent_requests=None, 
+        input_df,
+        text_columns=None,
+        batch_size=None,
+        concurrent_requests=None,
         checkpoint_dir=None,
         force_restart=False
     ):
@@ -404,23 +404,23 @@ async def llm_sentiment_analysis_v2(df,processed_data_path):
         Saves results as {column}_llm_score.
         """
         load_dotenv()
-        
+
         # Resolve parameters from config or defaults
         text_columns = text_columns or CONFIG_TEXT_COLUMNS
         batch_size = batch_size or CONFIG_BATCH_SIZE
         concurrent_requests = concurrent_requests or CONFIG_CONCURRENT_REQUESTS
         checkpoint_dir = checkpoint_dir or CONFIG_CHECKPOINT_DIR
         api_key = os.getenv("NEBIUS_API_KEY", "")
-        
+
         if not api_key:
             raise ValueError("NEBIUS_API_KEY not found in environment variables.")
 
         client = AsyncOpenAI(api_key=api_key, base_url=CONFIG_BASE_URL)
-        
+
         # 1. Setup Checkpoint Root
         if force_restart and os.path.exists(checkpoint_dir):
             shutil.rmtree(checkpoint_dir)
-        
+
         if not os.path.exists(checkpoint_dir):
             os.makedirs(checkpoint_dir)
 
@@ -430,7 +430,7 @@ async def llm_sentiment_analysis_v2(df,processed_data_path):
             if col not in input_df.columns:
                 print(f"Skipping {col}: column not found in DataFrame.")
                 continue
-                
+
             print(f"\n--- Processing column: {col} ---")
             col_checkpoint_dir = os.path.join(checkpoint_dir, col)
             if not os.path.exists(col_checkpoint_dir):
@@ -445,14 +445,14 @@ async def llm_sentiment_analysis_v2(df,processed_data_path):
                         processed_data.extend(json.load(f))
                 except:
                     continue
-                    
+
             processed_ids = {item['id'] for item in processed_data}
             print(f"Resuming '{col}': {len(processed_ids)} rows already processed.")
-            
+
             # 3. Filter Remaining Work
             work_df = input_df[~input_df.index.isin(processed_ids)].copy()
             work_df[col] = work_df[col].fillna("").str.slice(0, 500)
-            
+
             if not work_df.empty:
                 # 4. Define Internal Async Tasks
                 semaphore = asyncio.Semaphore(concurrent_requests)
@@ -465,7 +465,7 @@ async def llm_sentiment_analysis_v2(df,processed_data_path):
                 async def process_batch(batch_df, b_idx, folder):
                     payload = batch_df[[col]].reset_index().rename(columns={'index': 'id'}).to_dict(orient='records')
                     path = os.path.join(folder, f"batch_{b_idx}.json")
-                    
+
                     for attempt in range(5):
                         try:
                             response = await client.chat.completions.create(
@@ -483,7 +483,7 @@ async def llm_sentiment_analysis_v2(df,processed_data_path):
                             return results
                         except Exception:
                             await asyncio.sleep((2 ** attempt) + random.random())
-                    
+
                     err_res = [{"id": item['id'], "score": np.nan} for item in payload]
                     with open(path, 'w') as f: json.dump(err_res, f)
                     return err_res
@@ -491,7 +491,7 @@ async def llm_sentiment_analysis_v2(df,processed_data_path):
                 # 5. Execute Pipeline for this column
                 batches = [work_df[i:i + batch_size] for i in range(0, len(work_df), batch_size)]
                 start_ts = int(pd.Timestamp.now().timestamp())
-                
+
                 async def sem_task(b, i, f):
                     async with semaphore: return await process_batch(b, i, f)
 
@@ -505,7 +505,7 @@ async def llm_sentiment_analysis_v2(df,processed_data_path):
                 if file.endswith('.json'):
                     with open(os.path.join(col_checkpoint_dir, file), 'r') as f:
                         all_col_data.extend(json.load(f))
-            
+
             if all_col_data:
                 col_results = pd.DataFrame(all_col_data).drop_duplicates(subset='id').set_index('id')
                 final_results_df[f"{col}_llm_score"] = col_results['score'].reindex(input_df.index)
@@ -570,7 +570,7 @@ def preprocess(raw_data_path=config.RAW_DATA_PATH,
     split_and_save_data(airbnb, version_name, split_ratio, seed, processed_data_path)
 
 
-def save_data(df, version_name, name, processed_data_path): 
+def save_data(df, version_name, name, processed_data_path):
     filepath = os.path.join(processed_data_path,f'{version_name}_{name}.csv')
     df.to_csv(filepath, index=False)
 
@@ -607,13 +607,12 @@ def preprocess_v2_wrapper(args):
     save_data(X_test,  args.version_name, 'X_test',  args.processed_data_path)
     save_data(y_train, args.version_name, 'y_train', args.processed_data_path)
     save_data(y_test,  args.version_name, 'y_test',  args.processed_data_path)
-        
+
 def preprocess_v2(df,args):
 
-        # Remove duplicates
-    if args.drop_duplicate_rows:
+    # Remove duplicates
+    if 'drop_ duplicate_rows' in args and args.drop_duplicate_rows:
         df = remove_duplicates(df)
-        pass
 
     # if sentiment_analysis:
         # airbnb = llm_sentiment_analysis(airbnb)
@@ -621,7 +620,6 @@ def preprocess_v2(df,args):
     # Handle missing values
     if args.handle_missing_values:
         df = impute_missing_values(df)
-        pass
 
     # Handle column types
     if args.handle_column_types:
@@ -640,7 +638,7 @@ def preprocess_v2(df,args):
     # Prepare final dataset
     # if not keep_raw:
     df = prepare_final_dataset(df)
-    
+
     return df
 
 
@@ -665,7 +663,7 @@ if __name__ == '__main__':
         asyncio.run(llm_sentiment_analysis_v2(df,args.processed_data_path))
         exit(0)
 
-    
+
     ################################
     # Preprocessing v2
     ################################
