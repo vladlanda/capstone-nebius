@@ -42,9 +42,6 @@ def save_model(model, version_name, model_name):
 def train(
     model_name="linear",
     version_name=config.VERSION_NAME,
-    batch_size=config.BATCH_SIZE,
-    learning_rate=config.LEARNING_RATE,
-    epochs=config.EPOCHS,
     use_optuna=False,
 ):
 
@@ -55,7 +52,7 @@ def train(
     print(f"X_train shape: {X_train.shape}, y_train shape: {y_train.shape}")
     print(f"X_test shape:  {X_test.shape}, y_test shape:  {y_test.shape}")
 
-    run = init_wandb_run(model_name, version_name, batch_size, learning_rate, epochs)
+    run = init_wandb_run(model_name, version_name)
 
     if model_name == 'catboost' and use_optuna:
         print("Using Optuna to find best CatBoost parameters...")
@@ -82,9 +79,6 @@ def train(
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a model')
     parser.add_argument("--version-name", type=str, default=config.VERSION_NAME)
-    parser.add_argument("--batch-size", type=int, default=config.BATCH_SIZE)
-    parser.add_argument("--learning-rate", type=float, default=config.LEARNING_RATE)
-    parser.add_argument("--epochs", type=int, default=config.EPOCHS)
 
     parser.add_argument(
         "--model",
@@ -106,9 +100,6 @@ def main():
     train(
         model_name=args.model,
         version_name=args.version_name,
-        batch_size=args.batch_size,
-        learning_rate=args.learning_rate,
-        epochs=args.epochs,
         use_optuna=args.optuna
     )
 

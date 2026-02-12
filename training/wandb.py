@@ -1,7 +1,7 @@
 import wandb
 
 
-def init_wandb_run(model_name, version_name, batch_size, learning_rate, epochs):
+def init_wandb_run(model_name, version_name):
     wandb.login()
     return wandb.init(
         entity='asmazurik-company',
@@ -10,8 +10,5 @@ def init_wandb_run(model_name, version_name, batch_size, learning_rate, epochs):
         config={
             "model": f"{model_name} regression (sklearn)",
             "version": version_name,
-            "batch_size": batch_size,
-            "learning_rate": learning_rate,
-            "epochs": epochs,
         },
     )
