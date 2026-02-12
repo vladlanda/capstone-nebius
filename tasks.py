@@ -58,6 +58,43 @@ def server(c):
     )
     c.run(cmd,pty=True)
 
+# invoke preprocess-mixture-of-experts
+@task
+def preprocess_mixture_of_experts(c):
+    cmd = (
+        'python preprocess_new.py '
+        '--version-name v1_random_top80 '
+        '--drop-duplicate-rows '
+        '--handle-missing-values '
+        '--neighborhood-extraction '
+        '--handle-column-types '
+        '--knn-impute-price '
+        '--feature-engineering '
+        '--handle-outliers '
+        '--split-strategy random '
+        '--test-ratio 0.15 '
+        '--val-ratio 0.15 '
+        '--seed 42'
+    )
+    c.run(cmd,pty=True)
+
+
+
+# invoke train-mixture-of-experts
+@task
+def train_mixture_of_experts(c):
+    cmd = (
+        'python train_mix_of_experts.py '
+        '--threshold-method percentile '
+        '--threshold-percentile 75 '
+        '--clf-n-estimators 200 '
+        '--reg-n-estimators 500 '
+        '--reg-learning-rate 0.01 '
+        '--version-name v1_random_top80'
+    )
+    c.run(cmd,pty=True)
+
+
 # @task
 # def run_all(c):
 #     cmd = (
