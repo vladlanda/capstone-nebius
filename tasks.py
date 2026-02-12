@@ -36,6 +36,13 @@ def train_catboost(c):
     )
     c.run(cmd,pty=True)
 
+@task
+def train(c):
+    cmd = (
+        f'python train.py --model catboost'
+    )
+    c.run(cmd,pty=True)
+
 
 @task
 def train_catboost_optuna(c):
