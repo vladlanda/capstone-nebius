@@ -3,15 +3,11 @@ import pandas as pd
 import numpy as np
 import joblib
 from pathlib import Path
-from sklearn.preprocessing import StandardScaler
-from sklearn.linear_model import LinearRegression
-from sklearn.pipeline import Pipeline
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
-from sklearn.model_selection import train_test_split
 import wandb
 import optuna
 from config import config
-import joblib
+from training.model import get_pipeline, load_catboost_best_params
 
 ## TODO hyperparameters: batch_size, learning_rate, epochs.
 config.BATCH_SIZE
@@ -30,17 +26,9 @@ def get_data(processed_data_path=config.PROCESSED_DATA_PATH,
         for data in datasets
     ]
 
-def _load_catboost_best_params():
-    params_path = Path(config.MODEL_PATH) / "catboost_best_params.json"
-    if params_path.exists():
-        import json
-        return json.loads(params_path.read_text())
-    return None
-
-
 def find_best_catboost_params(n_trials=5):
     X_train, X_test, y_train, y_test = get_data()
-    base_params = _load_catboost_best_params()
+    base_params = load_catboost_best_params()
     if base_params is None:
         base_params = {
             "iterations": 800,
@@ -111,75 +99,6 @@ def find_best_catboost_params(n_trials=5):
     params_path.write_text(json.dumps(best_params, indent=2))
 
     return None
-
-
-def _build_pipeline(model, use_scaler=True):
-    steps = []
-    if use_scaler:
-        steps.append(("scaler", StandardScaler()))
-    steps.append(("model", model))
-    return Pipeline(steps)
-
-
-def load_linear_model():
-    from sklearn.linear_model import LinearRegression
-    return _build_pipeline(LinearRegression())
-
-
-def load_ridge_model():
-    from sklearn.linear_model import Ridge
-    return _build_pipeline(Ridge(alpha=1.0))
-
-
-def load_random_forest_model():
-    from sklearn.ensemble import RandomForestRegressor
-    return _build_pipeline(RandomForestRegressor(n_estimators=200))
-
-
-def load_xgboost_model():
-    from xgboost import XGBRegressor
-    model = XGBRegressor(
-        n_estimators=300,
-        learning_rate=0.05,
-        max_depth=6,
-    )
-    return _build_pipeline(model)
-
-
-def load_catboost_model():
-    from catboost import CatBoostRegressor
-    catboost_params = _load_catboost_best_params()
-    if catboost_params is None:
-        raise ValueError("catboost_best_params.json not found; run Optuna tuning first")
-    return CatBoostRegressor(
-        **catboost_params,
-        loss_function="RMSE",
-        verbose=False,
-        random_seed=42,
-    )
-
-
-def get_pipeline(model_name: str):
-    """
-    Returns a full pipeline based on CLI argument.
-    """
-
-    if model_name == "linear":
-        return load_linear_model()
-
-    if model_name == "ridge":
-        return load_ridge_model()
-
-    if model_name == "random_forest":
-        return load_random_forest_model()
-
-    if model_name == "xgboost":
-        return load_xgboost_model()
-
-    if model_name == "catboost":
-        return load_catboost_model()
-
-    raise ValueError(f"Unknown model: {model_name}")
 
 def train(
     model_name="linear",
