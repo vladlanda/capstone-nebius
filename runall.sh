@@ -1,3 +1,3 @@
 invoke preprocess
-invoke train-xgboost
+invoke train-catboost
 invoke server

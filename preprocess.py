@@ -524,51 +524,6 @@ async def llm_sentiment_analysis_v2(df,processed_data_path):
     os.makedirs(os.path.dirname(processed_data_path),exist_ok=True)
     df.to_csv(full_filepath, index=False)
 
-def preprocess(raw_data_path=config.RAW_DATA_PATH,
-               drop_duplicate_rows=False,
-            #    sentiment_analysis = False,
-               handle_column_types=False,
-               handle_missing_values=False,
-               handle_outliers_flag=False,
-               version_name=config.VERSION_NAME,
-               split_ratio=config.TEST_SIZE,
-               seed=config.RANDOM_SEED,
-               processed_data_path=config.PROCESSED_DATA_PATH):
-    """Main preprocessing pipeline for Airbnb data."""
-    # Load data
-    airbnb = load_raw_data(raw_data_path)
-
-    # Remove duplicates
-    if drop_duplicate_rows:
-        airbnb = remove_duplicates(airbnb)
-
-    # if sentiment_analysis:
-        # airbnb = llm_sentiment_analysis(airbnb)
-
-    # Handle missing values
-    if handle_missing_values:
-        airbnb = impute_missing_values(airbnb)
-
-    # Handle column types
-    if handle_column_types:
-        airbnb = convert_date_columns(airbnb)
-        airbnb = convert_boolean_columns(airbnb)
-        airbnb = convert_ordinal_columns(airbnb)
-        airbnb = convert_numeric_columns(airbnb)
-        airbnb = encode_list_columns(airbnb)
-        airbnb = encode_categorical_columns(airbnb)
-
-    # Handle outliers
-    if handle_outliers_flag:
-        airbnb = handle_outliers(airbnb)
-
-    # Prepare final dataset
-    # if not keep_raw:
-    airbnb = prepare_final_dataset(airbnb)
-
-    # Split and save
-    split_and_save_data(airbnb, version_name, split_ratio, seed, processed_data_path)
-
 
 def save_data(df, version_name, name, processed_data_path):
     filepath = os.path.join(processed_data_path,f'{version_name}_{name}.csv')
