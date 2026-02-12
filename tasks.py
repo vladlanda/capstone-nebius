@@ -54,7 +54,7 @@ def preprocess(c):
 @task
 def server(c):
     cmd = (
-        f'streamlit run server.py -- --model xgboost --drop-duplicate-rows --handle-column-types --handle-missing-values --handle-outliers'
+        f'streamlit run server.py -- --model xgboost --handle-column-types --handle-missing-values --handle-outliers'
     )
     c.run(cmd,pty=True)
 
