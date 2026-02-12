@@ -53,13 +53,8 @@ The project focuses on **Exploratory Data Analysis (EDA)** and **building a mode
 ## Model training
 
 ### The best model
-- `invoke preprocess-mixture-of-experts`
-- `invoke train-mixture-of-experts`
+- `./runall_no_server.sh`
 
-
-### Other models
-- `invoke train-catboost-optuna` -- find best catboost hyperparams with optuna
-- `invoke train-catboost` -- train catboost model
 
 ---
 
