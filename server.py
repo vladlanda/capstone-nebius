@@ -28,38 +28,6 @@ def load_artifacts(model_name):
     except Exception as e:
         return None
 
-def run_preprocess_pipeline(df, args):
-    """
-    Runs the individual functions from preprocess.py based on provided arguments.
-    """
-    try:
-        # 1. Handle Missing Values
-        if args.handle_missing_values:
-            df = preprocess.impute_missing_values(df)
-
-        # 2. Handle Column Types (Conversion + Encoding)
-        # In preprocess.py, these are grouped under one flag
-        if args.handle_column_types:
-            df = preprocess.convert_date_columns(df)
-            df = preprocess.convert_boolean_columns(df)
-            df = preprocess.convert_ordinal_columns(df)
-            df = preprocess.convert_numeric_columns(df)
-            df = preprocess.encode_list_columns(df)
-            df = preprocess.encode_categorical_columns(df)
-
-        # 3. Handle Outliers
-        if args.handle_outliers:
-            df = preprocess.handle_outliers(df)
-
-        # 4. Final Cleanup (Always runs in preprocess.py)
-        # This keeps only numeric columns and fills NaNs with 0
-        df = preprocess.prepare_final_dataset(df)
-
-        return df
-    except Exception as e:
-        st.error(f"Preprocessing failed: {e}")
-        st.write("Stacktrace:", e) # Helpful for debugging
-        return None
 
 def main(args):
     # --- Page Setup ---
@@ -101,7 +69,9 @@ def main(args):
 
                     # 1. Run preprocessing with CLI arguments
                     processed_df = preprocess.preprocess_v2(input_df.copy(), args)
-                    assert processed_df.shape[0] == input_df.shape[0], "Row count changed during preprocessing! Check logs."
+                    assert processed_df.shape[0] == input_df.shape[0], (
+                        "Row count changed during preprocessing! Check logs."
+                    )
 
                     if processed_df is not None:
                         # Load schema and align columns
