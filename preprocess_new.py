@@ -21,6 +21,10 @@ import asyncio
 import shutil
 import random
 
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import FunctionTransformer
+import joblib
+
 logging.basicConfig(level=logging.INFO)
 
 def load_raw_data(raw_data_path):
@@ -83,7 +87,6 @@ def remove_duplicates(df):
     logging.info(f"Dropped {initial_shape[0] - df.shape[0]} duplicate rows: {initial_shape} → {df.shape}")
     return df
 
-
 def impute_missing_values(df, seed=None, fitted_params=None):
     """Handle missing values through imputation and dropping.
 
@@ -134,7 +137,7 @@ def impute_missing_values(df, seed=None, fitted_params=None):
     # Drop rows with missing critical date columns
     critical_cols = ['first_review', 'last_review', 'review_scores_rating']
     initial_len = len(df)
-    df = df.dropna(subset=critical_cols, how='any')
+    # df = df.dropna(subset=critical_cols, how='any')
     logging.info(f"Dropped {initial_len - len(df)} rows with missing date columns")
 
     # Extract bathrooms from bathrooms_text
@@ -276,7 +279,6 @@ def convert_date_columns(df):
 
     return df
 
-
 def convert_boolean_columns(df):
     """Convert boolean columns from 't'/'f' to numeric."""
     bool_cols = ['host_is_superhost', 'host_has_profile_pic', 'instant_bookable']
@@ -286,7 +288,6 @@ def convert_boolean_columns(df):
             continue
         df[col] = df[col].map({'t': True, 'f': False}).astype(float)
     return df
-
 
 def convert_ordinal_columns(df):
     """Convert ordinal columns to numeric."""
@@ -299,7 +300,6 @@ def convert_ordinal_columns(df):
     if 'host_response_time' in df.columns:
         df['host_response_time'] = df['host_response_time'].map(response_time_order).astype(float)
     return df
-
 
 def convert_numeric_columns(df):
     """Convert numeric columns to proper numeric types."""
@@ -1028,11 +1028,19 @@ def save_data(df, version_name, name, processed_data_path):
     except Exception as e:
         logging.error(f"Failed to save {name}: {e}")
         raise
-
+def preprocess_v2_transform(X, args,keep_city, fitted_params):
+    return preprocess_v2(
+        df=X,
+        args=args,
+        keep_city=keep_city,
+        fitted_params=fitted_params
+    )[0]
 def preprocess_v2_wrapper(args):
     """
     Main preprocessing wrapper that handles both random and city-based splits.
     """
+    # Preprocessing pipeline object
+    preprocessing_pipeline_list = []
     # Load raw data
     df = load_raw_data(args.raw_data_path)
 
@@ -1074,6 +1082,15 @@ def preprocess_v2_wrapper(args):
         # Preprocess val/test sets using FITTED transformers from train
         logging.info("Preprocessing validation set (applying fitted transformers)...")
         val_df, _ = preprocess_v2(val_df_raw, args, keep_city=False, fitted_params=fitted_params)
+
+        transformer_preprocess_v2_with_args = FunctionTransformer(
+                                    func=preprocess_v2_transform,
+                                    kw_args={'args': args, 'keep_city': False,'fitted_params':fitted_params}
+                                )
+        # transformer_preprocess_v2_with_args = FunctionTransformer(
+        #                     lambda X: preprocess_v2(df=X,args=args, keep_city=False, fitted_params=fitted_params)[0]
+        #                 )
+        preprocessing_pipeline_list.append(('preprocess',transformer_preprocess_v2_with_args))
 
         logging.info("Preprocessing test set (applying fitted transformers)...")
         test_df, _ = preprocess_v2(test_df_raw, args, keep_city=False, fitted_params=fitted_params)
@@ -1117,7 +1134,14 @@ def preprocess_v2_wrapper(args):
     # Prepare final X matrices (remove id if present)
     X_train = train_df.drop(['id'], axis=1, errors='ignore')
     X_val = val_df.drop(['id'], axis=1, errors='ignore')
+    drop_with_args = FunctionTransformer(
+                                    func=pd.DataFrame.drop,
+                                    kw_args={'labels': ['id'], 'axis': 1,'errors':'ignore'}
+                                )
+    preprocessing_pipeline_list.append(('drop',drop_with_args))
     X_test = test_df.drop(['id'], axis=1, errors='ignore')
+
+    
 
     # Final validation checks
     assert len(X_train) == len(y_train), f"Row mismatch: X_train={len(X_train)}, y_train={len(y_train)}"
@@ -1145,6 +1169,12 @@ def preprocess_v2_wrapper(args):
     save_data(y_train, args.version_name, 'y_train', args.processed_data_path)
     save_data(y_val, args.version_name, 'y_val', args.processed_data_path)
     save_data(y_test, args.version_name, 'y_test', args.processed_data_path)
+
+    # Save pipeline
+    logging.info("Saving Pipeline...")
+    preprocess_pipeline = Pipeline(preprocessing_pipeline_list)
+    pipeline_path = os.path.join('./models', f'preprocessing_{args.version_name}.joblib')
+    joblib.dump(preprocess_pipeline, pipeline_path)
 
     logging.info(f"✓ All files saved to: {args.processed_data_path}")
     print(f"✓ Files saved with prefix: {args.version_name}_")

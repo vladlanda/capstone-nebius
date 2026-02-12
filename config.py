@@ -1,6 +1,6 @@
 class config:
     # Version Control
-    VERSION_NAME = 'v1'
+    VERSION_NAME = 'v1_random_top80'
     
     # Seeds
     RANDOM_SEED = 42

@@ -6,6 +6,10 @@ import argparse
 import sys
 from config import config
 
+from sklearn.pipeline import Pipeline
+from preprocess_new import preprocess_v2,preprocess_v2_transform
+from train_mix_of_experts import MixtureOfExpertsRegressor
+
 # Import your custom preprocessing script
 try:
     import preprocess
@@ -19,7 +23,8 @@ def load_artifacts(model_name):
     """
     Loads the model and the feature list.
     """
-    model_path = os.path.join(config.MODEL_PATH,f'{config.VERSION_NAME}_{model_name}.joblib')
+    model_path = os.path.join(config.MODEL_PATH,f'{config.VERSION_NAME}_{model_name}_moe.joblib')
+    print(model_path,os.path.exists(model_path),joblib.load(model_path))
     if not os.path.exists(model_path):
         return None
     try:
@@ -28,42 +33,54 @@ def load_artifacts(model_name):
     except Exception as e:
         return None
 
-def run_preprocess_pipeline(df, args):
-    """
-    Runs the individual functions from preprocess.py based on provided arguments.
-    """
-    try:
-        # 1. Drop Duplicates
-        if args.drop_duplicate_rows:
-            df = preprocess.remove_duplicates(df)
-            
-        # 2. Handle Missing Values
-        if args.handle_missing_values:
-            df = preprocess.impute_missing_values(df)
-        
-        # 3. Handle Column Types (Conversion + Encoding)
-        # In preprocess.py, these are grouped under one flag
-        if args.handle_column_types:
-            df = preprocess.convert_date_columns(df)
-            df = preprocess.convert_boolean_columns(df)
-            df = preprocess.convert_ordinal_columns(df)
-            df = preprocess.convert_numeric_columns(df)
-            df = preprocess.encode_list_columns(df)
-            df = preprocess.encode_categorical_columns(df)
-        
-        # 4. Handle Outliers
-        if args.handle_outliers:
-            df = preprocess.handle_outliers(df)
-        
-        # 5. Final Cleanup (Always runs in preprocess.py)
-        # This keeps only numeric columns and fills NaNs with 0
-        df = preprocess.prepare_final_dataset(df)
-        
-        return df
-    except Exception as e:
-        st.error(f"Preprocessing failed: {e}")
-        st.write("Stacktrace:", e) # Helpful for debugging
+@st.cache_resource
+def load_preprocess():
+    model_path = os.path.join(config.MODEL_PATH,f'preprocessing_{config.VERSION_NAME}.joblib')
+    print(model_path,os.path.exists(model_path),joblib.load(model_path))
+    if not os.path.exists(model_path):
         return None
+    try:
+        artifacts = joblib.load(model_path)
+        return artifacts
+    except Exception as e:
+        return None
+
+# def run_preprocess_pipeline(df, args):
+#     """
+#     Runs the individual functions from preprocess.py based on provided arguments.
+#     """
+#     try:
+#         # 1. Drop Duplicates
+#         if args.drop_duplicate_rows:
+#             df = preprocess.remove_duplicates(df)
+            
+#         # 2. Handle Missing Values
+#         if args.handle_missing_values:
+#             df = preprocess.impute_missing_values(df)
+        
+#         # 3. Handle Column Types (Conversion + Encoding)
+#         # In preprocess.py, these are grouped under one flag
+#         if args.handle_column_types:
+#             df = preprocess.convert_date_columns(df)
+#             df = preprocess.convert_boolean_columns(df)
+#             df = preprocess.convert_ordinal_columns(df)
+#             df = preprocess.convert_numeric_columns(df)
+#             df = preprocess.encode_list_columns(df)
+#             df = preprocess.encode_categorical_columns(df)
+        
+#         # 4. Handle Outliers
+#         if args.handle_outliers:
+#             df = preprocess.handle_outliers(df)
+        
+#         # 5. Final Cleanup (Always runs in preprocess.py)
+#         # This keeps only numeric columns and fills NaNs with 0
+#         df = preprocess.prepare_final_dataset(df)
+        
+#         return df
+#     except Exception as e:
+#         st.error(f"Preprocessing failed: {e}")
+#         st.write("Stacktrace:", e) # Helpful for debugging
+#         return None
 
 def main(args):
     # --- Page Setup ---
@@ -81,9 +98,16 @@ def main(args):
         st.warning("No preprocessing flags set! Data will be passed largely 'as-is' (only numeric fields kept).")
 
     # --- Load Model ---
-    pipeline = load_artifacts(args.model)
+    preprocess_pipeline = load_preprocess()
+    artifacts = load_artifacts(args.model)
 
-    if pipeline is None:
+    # pipeline = Pipeline([(key,value) for key,value in artifacts.items()])
+    scaler = artifacts["scaler"]
+    model  = artifacts["model"]
+
+
+    # return
+    if model is None:
         st.error(f"'{args.model}' model not found! Please run 'invoke train_{args.model}' first.")
         return
 
@@ -104,8 +128,10 @@ def main(args):
                 with st.spinner('Preprocessing and Predicting...'):
                     
                     # 1. Run preprocessing with CLI arguments
-                    processed_df = preprocess.preprocess_v2(input_df.copy(), args)
-                    
+                    # processed_df = preprocess.preprocess_v2(input_df.copy(), args)
+                    processed_df = preprocess_pipeline.transform(input_df.copy())
+                    # print(processed_df)
+
                     if processed_df is not None:
                         # Load schema and align columns
                         import json
@@ -118,7 +144,8 @@ def main(args):
                         
                         # Predict
                         try:
-                            predictions = pipeline.predict(processed_df)
+                            # print(processed_df)
+                            predictions = model.predict(scaler.transform(processed_df))
                             
                             output_df = pd.DataFrame(predictions, columns=['predicted'])
                             
@@ -142,7 +169,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run Streamlit App with specific preprocessing args")
     
     # Model arg
-    parser.add_argument("--model", type=str, default="xgboost",choices=["linear", "ridge", "random_forest", "xgboost"], help="Path to model bundle")
+    parser.add_argument("--model", type=str, default="xgboost",choices=["linear", "ridge", "random_forest", "xgboost","xgboost_xgboost"], help="Path to model bundle")
 
     # Preprocess.py args (Defaults match preprocess.py)
     parser.add_argument("--drop-duplicate-rows"  ,    action='store_true', default=False)

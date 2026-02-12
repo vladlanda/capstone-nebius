@@ -101,6 +101,7 @@ class MixtureOfExpertsRegressor(BaseEstimator, RegressorMixin):
             preds = self.classifier.predict(X)
             return np.column_stack([1 - preds, preds])
 
+    
 
 def get_data(processed_data_path=config.PROCESSED_DATA_PATH,
              version_name=config.VERSION_NAME,
