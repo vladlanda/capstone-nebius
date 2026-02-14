@@ -7,31 +7,38 @@ from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
 from config import config
 
 
-def compute_metrics(y_train, y_train_pred, y_test, y_test_pred):
-    train_mse = mean_squared_error(y_train, y_train_pred)
-    train_rmse = np.sqrt(train_mse)
-    train_mae = mean_absolute_error(y_train, y_train_pred)
-    train_r2 = r2_score(y_train, y_train_pred)
+def compute_metrics_impl(pred, gt):
+    mse = mean_squared_error(gt, pred)
+    rmse = np.sqrt(mse)
+    mae = mean_absolute_error(gt, pred)
+    r2 = r2_score(gt, pred)
+    return {
+        "rmse": rmse,
+        "mae": mae,
+        "r2": r2,
+    }
 
-    test_mse = mean_squared_error(y_test, y_test_pred)
-    test_rmse = np.sqrt(test_mse)
-    test_mae = mean_absolute_error(y_test, y_test_pred)
-    test_r2 = r2_score(y_test, y_test_pred)
+
+def compute_metrics(y_train, y_train_pred, y_test, y_test_pred):
+    train_metrics = compute_metrics_impl(y_train_pred, y_train)
+    test_metrics = compute_metrics_impl(y_test_pred, y_test)
 
     print(
-        f"\nTrain Metrics - RMSE: {train_rmse:.4f}, MAE: {train_mae:.4f}, R2: {train_r2:.4f}"
+        f"\nTrain Metrics - RMSE: {train_metrics['rmse']:.4f}, "
+        f"MAE: {train_metrics['mae']:.4f}, R2: {train_metrics['r2']:.4f}"
     )
     print(
-        f"Test Metrics - RMSE: {test_rmse:.4f}, MAE: {test_mae:.4f}, R2: {test_r2:.4f}"
+        f"Test Metrics - RMSE: {test_metrics['rmse']:.4f}, "
+        f"MAE: {test_metrics['mae']:.4f}, R2: {test_metrics['r2']:.4f}"
     )
 
     return {
-        "train_rmse": train_rmse,
-        "train_mae": train_mae,
-        "train_r2": train_r2,
-        "test_rmse": test_rmse,
-        "test_mae": test_mae,
-        "test_r2": test_r2,
+        "train_rmse": train_metrics["rmse"],
+        "train_mae": train_metrics["mae"],
+        "train_r2": train_metrics["r2"],
+        "test_rmse": test_metrics["rmse"],
+        "test_mae": test_metrics["mae"],
+        "test_r2": test_metrics["r2"],
     }
 
 

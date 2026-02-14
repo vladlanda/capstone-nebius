@@ -70,7 +70,7 @@ def apply_model(
         )
 
     predictions = pipeline.predict(processed_df)
-    return pd.DataFrame(predictions, columns=["predicted"])
+    return pd.DataFrame(predictions, columns=["review_scores_rating"])
 
 
 def run_prediction(
@@ -97,9 +97,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="Run batch predictions with a trained AirBnB model"
     )
     parser.add_argument("--input", required=True, help="Input CSV path")
-    parser.add_argument(
-        "--output", default="predictions.csv", help="Output CSV path"
-    )
+    parser.add_argument("--output", required=True, help="Output CSV path")
     parser.add_argument(
         "--model",
         type=str,
@@ -135,4 +133,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

@@ -566,7 +566,7 @@ def preprocess_v2_wrapper(args):
 def preprocess_v2(df,args):
 
     # Remove duplicates
-    if 'drop_ duplicate_rows' in args and args.drop_duplicate_rows:
+    if 'drop_duplicate_rows' in args and args.drop_duplicate_rows:
         df = remove_duplicates(df)
 
     # if sentiment_analysis:
