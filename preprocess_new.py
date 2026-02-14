@@ -1172,10 +1172,9 @@ def preprocess_v2(df, args, keep_city=False, fitted_params=None):
         df = remove_duplicates(df)
 
     # Handle missing values (with seed for reproducibility)
-    if args.handle_missing_values:
-        df, params_missing = impute_missing_values(df, seed=args.seed, fitted_params=params.get('missing_values'))
-        if is_training:
-            params['missing_values'] = params_missing
+    df, params_missing = impute_missing_values(df, seed=args.seed, fitted_params=params.get('missing_values'))
+    if is_training:
+        params['missing_values'] = params_missing
 
     # Extract neighborhoods BEFORE column type conversions (needs raw text columns)
     if args.neighborhood_extraction:
@@ -1230,8 +1229,6 @@ if __name__ == '__main__':
     # Preprocessing flags
     parser.add_argument("--drop-duplicate-rows", action='store_true', default=False,
                         help="Remove duplicate rows")
-    parser.add_argument("--handle-missing-values", action='store_true', default=False,
-                        help="Impute missing values")
     parser.add_argument("--neighborhood-extraction", action='store_true', default=False,
                         help="Extract neighborhoods from text (integrated into pipeline)")
     parser.add_argument("--knn-impute-price", action='store_true', default=False,
@@ -1287,7 +1284,6 @@ if __name__ == '__main__':
 #     python preprocess_new.py `
 #   --version-name 'v1_city' `
 #   --drop-duplicate-rows `
-#   --handle-missing-values `
 #   --neighborhood-extraction `
 #   --knn-impute-price `
 #   --feature-engineering `

@@ -50,7 +50,6 @@ def main(args):
                         output_df = predict_lib.apply_model(
                             input_df,
                             args.model,
-                            args.handle_missing_values,
                             args.handle_outliers,
                         )
 
@@ -76,7 +75,6 @@ if __name__ == "__main__":
     parser.add_argument("--model", type=str, default="xgboost",choices=["linear", "ridge", "random_forest", "xgboost"], help="Path to model bundle")
 
     # Preprocess.py args (Defaults match preprocess.py)
-    parser.add_argument("--handle-missing-values",  action='store_true', default=False)
     parser.add_argument("--handle-outliers"      ,        action='store_true', default=False)
 
     # Note: LLM Sentiment analysis omitted for inference app to avoid async complexity/API requirements

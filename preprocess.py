@@ -573,8 +573,7 @@ def preprocess_v2(df,args):
         # airbnb = llm_sentiment_analysis(airbnb)
 
     # Handle missing values
-    if args.handle_missing_values:
-        df = impute_missing_values(df)
+    df = impute_missing_values(df)
 
     # Handle column types
     df = convert_date_columns(df)
@@ -600,7 +599,6 @@ if __name__ == '__main__':
     parser.add_argument("--raw-data-path", type=str, default=config.RAW_DATA_PATH)
     parser.add_argument("--drop-duplicate-rows",    action='store_true', default=False)
     parser.add_argument("--llm-sentiment-analysis", action='store_true', default=False)
-    parser.add_argument("--handle-missing-values",  action='store_true', default=False)
     parser.add_argument("--handle-outliers",        action='store_true', default=False)
     parser.add_argument("--version-name", type=str, default=config.VERSION_NAME)
     parser.add_argument("--split-ratio", type=float, default=config.TEST_SIZE)
@@ -627,7 +625,6 @@ if __name__ == '__main__':
     # preprocess(raw_data_path=args.raw_data_path,
     #             drop_duplicate_rows=args.drop_duplicate_rows,
     #             # sentiment_analysis = args.llm_sentiment_analysis,
-    #             handle_missing_values=args.handle_missing_values,
     #             handle_outliers_flag=args.handle_outliers,
     #             version_name=args.version_name,
     #             split_ratio=args.split_ratio,
