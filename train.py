@@ -3,6 +3,7 @@ import pandas as pd
 import joblib
 from pathlib import Path
 from config import config
+from predict import predict_df
 from training.model import get_pipeline
 from training.hyperparameters_tuning import find_best_catboost_params
 from training.metrics import compute_metrics, save_metrics_summary
@@ -65,8 +66,8 @@ def train(
     save_model(pipeline, version_name, model_name)
     print("Done")
 
-    y_train_pred = pipeline.predict(X_train)
-    y_test_pred  = pipeline.predict(X_test)
+    y_train_pred = predict_df(pipeline, X_train).to_numpy().flatten()
+    y_test_pred = predict_df(pipeline, X_test).to_numpy().flatten()
     save_predictions(y_train, y_train_pred, y_test, y_test_pred, version_name, model_name)
 
     metrics = compute_metrics(y_train, y_train_pred, y_test, y_test_pred)

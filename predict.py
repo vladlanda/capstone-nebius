@@ -4,6 +4,7 @@ import os
 import sys
 
 import joblib
+import numpy as np
 import pandas as pd
 
 from config import config
@@ -40,6 +41,12 @@ def write_output_csv(output_df: pd.DataFrame, output_path: str) -> None:
     output_df.to_csv(output_path, index=False)
 
 
+def predict_df(pipeline, input_df: pd.DataFrame) -> pd.DataFrame:
+    predictions = pipeline.predict(input_df)
+    predictions = np.minimum(predictions, 5)
+    return pd.DataFrame(predictions, columns=["review_scores_rating"])
+
+
 def apply_model(
     input_df: pd.DataFrame,
     model_name: str,
@@ -63,8 +70,7 @@ def apply_model(
             f"'{model_name}' model not found. Run 'invoke train_{model_name}' first."
         )
 
-    predictions = pipeline.predict(processed_df)
-    return pd.DataFrame(predictions, columns=["review_scores_rating"])
+    return predict_df(pipeline, processed_df)
 
 
 def run_prediction(
