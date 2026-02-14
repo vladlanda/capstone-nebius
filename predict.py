@@ -92,13 +92,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--input", required=True, help="Input CSV path")
     parser.add_argument("--output", required=True, help="Output CSV path")
-    parser.add_argument(
-        "--model",
-        type=str,
-        default="catboost",
-        choices=["linear", "ridge", "random_forest", "xgboost", "catboost"],
-        help="Model name to load",
-    )
     return parser
 
 
@@ -110,7 +103,7 @@ def main() -> int:
         run_prediction(
             args.input,
             args.output,
-            args.model,
+            "catboost",
         )
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)

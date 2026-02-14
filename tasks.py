@@ -24,7 +24,7 @@ def xgboost_experiment(c):
 @task
 def train_xgboost(c):
     cmd = (
-        f'python train.py --model catboost'
+        f'python train.py'
     )
     c.run(cmd,pty=True)
 
@@ -32,14 +32,14 @@ def train_xgboost(c):
 @task
 def train_catboost(c):
     cmd = (
-        f'python train.py --model catboost'
+        f'python train.py'
     )
     c.run(cmd,pty=True)
 
 @task
 def train(c):
     cmd = (
-        f'python train.py --model catboost'
+        f'python train.py'
     )
     c.run(cmd,pty=True)
 
@@ -47,7 +47,7 @@ def train(c):
 @task
 def train_catboost_optuna(c):
     cmd = (
-        f'python train.py --model catboost --optuna'
+        f'python train.py --optuna'
     )
     c.run(cmd,pty=True)
 
@@ -61,7 +61,7 @@ def preprocess(c):
 @task
 def server(c):
     cmd = (
-        f'streamlit run server.py -- --model catboost'
+        f'streamlit run server.py'
     )
     c.run(cmd,pty=True)
 

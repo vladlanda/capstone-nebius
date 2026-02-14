@@ -1,7 +1,5 @@
 import streamlit as st
 import pandas as pd
-import os
-import argparse
 import predict as predict_lib
 
 
@@ -10,24 +8,18 @@ def cached_load_artifacts(model_name: str):
     return predict_lib.load_artifacts(model_name)
 
 
-def main(args):
+def main():
+    model_name = "catboost"
     # --- Page Setup ---
     st.set_page_config(page_title="AirBnB Price Predictor", layout="centered")
     st.title("🏠 AirBnB Price Predictor")
 
     # Display current configuration
-    st.caption(f"Model: `{args.model}`")
-
-    # Show active flags
-    active_flags = [k for k, v in vars(args).items() if v is True and k != 'model']
-    if active_flags:
-        st.info(f"Active Preprocessing Steps: {', '.join(active_flags)}")
-    else:
-        st.warning("No preprocessing flags set! Data will be passed largely 'as-is' (only numeric fields kept).")
+    st.caption(f"Model: `{model_name}`")
 
     # --- Load Model ---
-    if cached_load_artifacts(args.model) is None:
-        st.error(f"'{args.model}' model not found! Please run 'invoke train_{args.model}' first.")
+    if cached_load_artifacts(model_name) is None:
+        st.error(f"'{model_name}' model not found! Please run 'invoke train_{model_name}' first.")
         return
 
     # model = artifacts['model']
@@ -49,7 +41,7 @@ def main(args):
                     try:
                         output_df = predict_lib.apply_model(
                             input_df,
-                            args.model,
+                            model_name,
                         )
 
                         st.write("### Predictions")
@@ -68,18 +60,4 @@ def main(args):
             st.error(f"Error reading file: {e}")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run Streamlit App with specific preprocessing args")
-
-    # Model arg
-    parser.add_argument("--model", type=str, default="catboost",choices=["linear", "ridge", "random_forest", "xgboost", "catboost"], help="Path to model bundle")
-
-    # Preprocess.py args (Defaults match preprocess.py)
-
-    # Note: LLM Sentiment analysis omitted for inference app to avoid async complexity/API requirements
-
-    try:
-        args = parser.parse_args()
-    except SystemExit as e:
-        os._exit(int(e.code))
-
-    main(args)
+    main()

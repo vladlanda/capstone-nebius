@@ -41,7 +41,7 @@ def save_model(model, version_name, model_name):
     return model_path
 
 def train(
-    model_name="linear",
+    model_name="catboost",
     version_name=config.VERSION_NAME,
     use_optuna=False,
 ):
@@ -80,14 +80,6 @@ def train(
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a model')
     parser.add_argument("--version-name", type=str, default=config.VERSION_NAME)
-
-    parser.add_argument(
-        "--model",
-        type=str,
-        default="linear",
-        choices=["linear", "ridge", "random_forest", "xgboost", "catboost"],
-        help="Choose which model to train",
-    )
     parser.add_argument(
         "--optuna", action="store_true", help="Enable Optuna tuning for CatBoost"
     )
@@ -99,7 +91,7 @@ def main():
     args = parse_args()
 
     train(
-        model_name=args.model,
+        model_name="catboost",
         version_name=args.version_name,
         use_optuna=args.optuna
     )
