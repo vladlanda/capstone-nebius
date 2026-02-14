@@ -127,6 +127,28 @@ def evaluate(c):
     cmd = (
         'python evaluate.py '
         '--pred /tmp/city3_pred.csv '
-        '--gt data/raw_city3/airbnb_city3_y.csv'
+        '--gt data/raw_city3/airbnb_city3_y.csv '
+        '--name city3'
+    )
+    c.run(cmd, pty=True)
+
+
+@task
+def predict_on_test(c):
+    cmd = (
+        'python predict.py '
+        '--input /Users/almaz/nebius_academy/capstone/capstone-nebius/data/processed/v1_X_test.csv '
+        '--output /tmp/test_pred.csv'
+    )
+    c.run(cmd, pty=True)
+
+
+@task
+def evaluate_on_test(c):
+    cmd = (
+        'python evaluate.py '
+        '--pred /tmp/test_pred.csv '
+        '--gt /Users/almaz/nebius_academy/capstone/capstone-nebius/data/processed/v1_y_test.csv '
+        '--name test_set'
     )
     c.run(cmd, pty=True)

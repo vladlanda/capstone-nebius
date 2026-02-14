@@ -128,7 +128,6 @@ def main() -> int:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
 
-    print(f"Saved predictions to {args.output}")
     return 0
 
 
