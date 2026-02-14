@@ -1184,19 +1184,18 @@ def preprocess_v2(df, args, keep_city=False, fitted_params=None):
             params['neighborhood_extraction'] = params_neighborhood
 
     # Handle column types (MUST come after neighborhood extraction, before KNN imputation)
-    if args.handle_column_types:
-        df = convert_date_columns(df)
-        df = convert_boolean_columns(df)
-        df = convert_ordinal_columns(df)
-        df = convert_numeric_columns(df)
+    df = convert_date_columns(df)
+    df = convert_boolean_columns(df)
+    df = convert_ordinal_columns(df)
+    df = convert_numeric_columns(df)
 
-        df, params_list = encode_list_columns(df, fitted_params=params.get('list_encoding'))
-        if is_training:
-            params['list_encoding'] = params_list
+    df, params_list = encode_list_columns(df, fitted_params=params.get('list_encoding'))
+    if is_training:
+        params['list_encoding'] = params_list
 
-        df, params_cat = encode_categorical_columns(df, fitted_params=params.get('categorical_encoding'))
-        if is_training:
-            params['categorical_encoding'] = params_cat
+    df, params_cat = encode_categorical_columns(df, fitted_params=params.get('categorical_encoding'))
+    if is_training:
+        params['categorical_encoding'] = params_cat
 
     # KNN imputation for price (comes AFTER encoding property_type)
     if args.knn_impute_price:
@@ -1235,10 +1234,8 @@ if __name__ == '__main__':
                         help="Impute missing values")
     parser.add_argument("--neighborhood-extraction", action='store_true', default=False,
                         help="Extract neighborhoods from text (integrated into pipeline)")
-    parser.add_argument("--handle-column-types", action='store_true', default=False,
-                        help="Convert column types (dates, booleans, etc.)")
     parser.add_argument("--knn-impute-price", action='store_true', default=False,
-                        help="Use KNN imputation for missing prices (requires --handle-column-types)")
+                        help="Use KNN imputation for missing prices")
     parser.add_argument("--feature-engineering", action='store_true', default=False,
                         help="Create engineered features")
     parser.add_argument("--handle-outliers", action='store_true', default=False,
@@ -1292,7 +1289,6 @@ if __name__ == '__main__':
 #   --drop-duplicate-rows `
 #   --handle-missing-values `
 #   --neighborhood-extraction `
-#   --handle-column-types `
 #   --knn-impute-price `
 #   --feature-engineering `
 #   --handle-outliers `

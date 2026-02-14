@@ -43,13 +43,11 @@ def write_output_csv(output_df: pd.DataFrame, output_path: str) -> None:
 def apply_model(
     input_df: pd.DataFrame,
     model_name: str,
-    handle_column_types: bool,
     handle_missing_values: bool,
     handle_outliers: bool,
 ) -> pd.DataFrame:
     preprocess_args = argparse.Namespace(
         model=model_name,
-        handle_column_types=handle_column_types,
         handle_missing_values=handle_missing_values,
         handle_outliers=handle_outliers,
     )
@@ -77,7 +75,6 @@ def run_prediction(
     input_path: str,
     output_path: str,
     model_name: str,
-    handle_column_types: bool,
     handle_missing_values: bool,
     handle_outliers: bool,
 ) -> None:
@@ -85,7 +82,6 @@ def run_prediction(
     output_df = apply_model(
         input_df,
         model_name,
-        handle_column_types,
         handle_missing_values,
         handle_outliers,
     )
@@ -105,7 +101,6 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["linear", "ridge", "random_forest", "xgboost"],
         help="Model name to load",
     )
-    parser.add_argument("--handle-column-types", action="store_true", default=False)
     parser.add_argument("--handle-missing-values", action="store_true", default=False)
     parser.add_argument("--handle-outliers", action="store_true", default=False)
     return parser
@@ -120,7 +115,6 @@ def main() -> int:
             args.input,
             args.output,
             args.model,
-            args.handle_column_types,
             args.handle_missing_values,
             args.handle_outliers,
         )

@@ -577,14 +577,12 @@ def preprocess_v2(df,args):
         df = impute_missing_values(df)
 
     # Handle column types
-    if args.handle_column_types:
-        df = convert_date_columns(df)
-        df = convert_boolean_columns(df)
-        df = convert_ordinal_columns(df)
-        df = convert_numeric_columns(df)
-        df = encode_list_columns(df)
-        df = encode_categorical_columns(df)
-        pass
+    df = convert_date_columns(df)
+    df = convert_boolean_columns(df)
+    df = convert_ordinal_columns(df)
+    df = convert_numeric_columns(df)
+    df = encode_list_columns(df)
+    df = encode_categorical_columns(df)
 
     # Handle outliers
     if args.handle_outliers:
@@ -602,7 +600,6 @@ if __name__ == '__main__':
     parser.add_argument("--raw-data-path", type=str, default=config.RAW_DATA_PATH)
     parser.add_argument("--drop-duplicate-rows",    action='store_true', default=False)
     parser.add_argument("--llm-sentiment-analysis", action='store_true', default=False)
-    parser.add_argument("--handle-column-types",    action='store_true', default=False)
     parser.add_argument("--handle-missing-values",  action='store_true', default=False)
     parser.add_argument("--handle-outliers",        action='store_true', default=False)
     parser.add_argument("--version-name", type=str, default=config.VERSION_NAME)
@@ -630,7 +627,6 @@ if __name__ == '__main__':
     # preprocess(raw_data_path=args.raw_data_path,
     #             drop_duplicate_rows=args.drop_duplicate_rows,
     #             # sentiment_analysis = args.llm_sentiment_analysis,
-    #             handle_column_types=args.handle_column_types,
     #             handle_missing_values=args.handle_missing_values,
     #             handle_outliers_flag=args.handle_outliers,
     #             version_name=args.version_name,
