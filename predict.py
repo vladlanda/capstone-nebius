@@ -89,8 +89,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--model",
         type=str,
-        default="xgboost",
-        choices=["linear", "ridge", "random_forest", "xgboost"],
+        default="catboost",
+        choices=["linear", "ridge", "random_forest", "xgboost", "catboost"],
         help="Model name to load",
     )
     return parser

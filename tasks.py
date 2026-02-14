@@ -24,7 +24,7 @@ def xgboost_experiment(c):
 @task
 def train_xgboost(c):
     cmd = (
-        f'python train.py --model xgboost'
+        f'python train.py --model catboost'
     )
     c.run(cmd,pty=True)
 
@@ -61,7 +61,7 @@ def preprocess(c):
 @task
 def server(c):
     cmd = (
-        f'streamlit run server.py -- --model xgboost'
+        f'streamlit run server.py -- --model catboost'
     )
     c.run(cmd,pty=True)
 

@@ -71,7 +71,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run Streamlit App with specific preprocessing args")
 
     # Model arg
-    parser.add_argument("--model", type=str, default="xgboost",choices=["linear", "ridge", "random_forest", "xgboost"], help="Path to model bundle")
+    parser.add_argument("--model", type=str, default="catboost",choices=["linear", "ridge", "random_forest", "xgboost", "catboost"], help="Path to model bundle")
 
     # Preprocess.py args (Defaults match preprocess.py)
 
@@ -80,6 +80,6 @@ if __name__ == "__main__":
     try:
         args = parser.parse_args()
     except SystemExit as e:
-        os._exit(e.code)
+        os._exit(int(e.code))
 
     main(args)
