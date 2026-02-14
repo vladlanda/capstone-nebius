@@ -110,3 +110,23 @@ def train_mixture_of_experts(c):
 #         'invoke server'
 #     )
 #     c.run(cmd,pty=True)
+
+
+@task
+def predict(c):
+    cmd = (
+        'python predict.py '
+        '--input data/raw_city3/airbnb_city3_x.csv '
+        '--output /tmp/city3_pred.csv'
+    )
+    c.run(cmd, pty=True)
+
+
+@task
+def evaluate(c):
+    cmd = (
+        'python evaluate.py '
+        '--pred /tmp/city3_pred.csv '
+        '--gt data/raw_city3/airbnb_city3_y.csv'
+    )
+    c.run(cmd, pty=True)
