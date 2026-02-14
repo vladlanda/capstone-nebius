@@ -1,32 +1,13 @@
 import streamlit as st
 import pandas as pd
-import joblib
 import os
 import argparse
-import sys
-from config import config
+import predict as predict_lib
 
-# Import your custom preprocessing script
-try:
-    import preprocess
-except ImportError as e:
-    st.error(f"Error importing preprocess.py: {e}")
-    st.stop()
 
-# --- Helper Functions ---
 @st.cache_resource
-def load_artifacts(model_name):
-    """
-    Loads the model and the feature list.
-    """
-    model_path = os.path.join(config.MODEL_PATH,f'{config.VERSION_NAME}_{model_name}.joblib')
-    if not os.path.exists(model_path):
-        return None
-    try:
-        artifacts = joblib.load(model_path)
-        return artifacts
-    except Exception as e:
-        return None
+def cached_load_artifacts(model_name: str):
+    return predict_lib.load_artifacts(model_name)
 
 
 def main(args):
@@ -45,9 +26,7 @@ def main(args):
         st.warning("No preprocessing flags set! Data will be passed largely 'as-is' (only numeric fields kept).")
 
     # --- Load Model ---
-    pipeline = load_artifacts(args.model)
-
-    if pipeline is None:
+    if cached_load_artifacts(args.model) is None:
         st.error(f"'{args.model}' model not found! Please run 'invoke train_{args.model}' first.")
         return
 
@@ -67,41 +46,27 @@ def main(args):
             if st.button("Predict"):
                 with st.spinner('Preprocessing and Predicting...'):
 
-                    # 1. Run preprocessing with CLI arguments
-                    processed_df = preprocess.preprocess_v2(input_df.copy(), args)
-                    assert processed_df.shape[0] == input_df.shape[0], (
-                        "Row count changed during preprocessing! Check logs."
-                    )
+                    try:
+                        output_df = predict_lib.apply_model(
+                            input_df,
+                            args.model,
+                            args.handle_column_types,
+                            args.handle_missing_values,
+                            args.handle_outliers,
+                        )
 
-                    if processed_df is not None:
-                        # Load schema and align columns
-                        import json
-                        schema_path = os.path.join(config.MODEL_PATH, f"{config.VERSION_NAME}_{args.model}_schema.json")
-                        with open(schema_path) as f:
-                            expected_cols = json.load(f)["columns"]
+                        st.write("### Predictions")
+                        st.dataframe(output_df.head())
 
-                        # Align to schema: add missing=0, drop extra, reorder
-                        processed_df = processed_df.reindex(columns=expected_cols, fill_value=0)
-
-                        # Predict
-                        try:
-                            predictions = pipeline.predict(processed_df)
-
-                            output_df = pd.DataFrame(predictions, columns=['predicted'])
-
-                            st.write("### Predictions")
-                            st.dataframe(output_df.head())
-
-                            # Download
-                            csv = output_df.to_csv(index=False).encode('utf-8')
-                            st.download_button(
-                                label="Download Predictions",
-                                data=csv,
-                                file_name='predictions.csv',
-                                mime='text/csv',
-                            )
-                        except Exception as e:
-                            st.error(f"Prediction failed: {e}")
+                        csv = output_df.to_csv(index=False).encode("utf-8")
+                        st.download_button(
+                            label="Download Predictions",
+                            data=csv,
+                            file_name="predictions.csv",
+                            mime="text/csv",
+                        )
+                    except Exception as e:
+                        st.error(f"Prediction failed: {e}")
         except Exception as e:
             st.error(f"Error reading file: {e}")
 
