@@ -21,6 +21,7 @@ def load_artifacts(model_name: str):
         config.MODEL_PATH, f"{config.VERSION_NAME}_{model_name}.joblib"
     )
     if not os.path.exists(model_path):
+        print(f"Model file not found: {model_path}")
         return None
     return joblib.load(model_path)
 

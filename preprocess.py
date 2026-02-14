@@ -588,6 +588,7 @@ def preprocess_v2(df,args):
     # Prepare final dataset
     # if not keep_raw:
     df = prepare_final_dataset(df)
+    df = df.drop(columns=["latitude", "longitude"], errors="ignore")
 
     return df
 

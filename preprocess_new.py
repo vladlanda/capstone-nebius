@@ -1211,6 +1211,7 @@ def preprocess_v2(df, args, keep_city=False, fitted_params=None):
 
     # Prepare final dataset
     df = prepare_final_dataset(df, keep_city=keep_city)
+    df = df.drop(columns=["latitude", "longitude"], errors="ignore")
 
     return df, params
 
