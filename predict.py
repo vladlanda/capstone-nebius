@@ -43,11 +43,9 @@ def write_output_csv(output_df: pd.DataFrame, output_path: str) -> None:
 def apply_model(
     input_df: pd.DataFrame,
     model_name: str,
-    handle_outliers: bool,
 ) -> pd.DataFrame:
     preprocess_args = argparse.Namespace(
         model=model_name,
-        handle_outliers=handle_outliers,
     )
     processed_df = preprocess.preprocess_v2(input_df.copy(), preprocess_args)
     if processed_df is None:
@@ -73,13 +71,11 @@ def run_prediction(
     input_path: str,
     output_path: str,
     model_name: str,
-    handle_outliers: bool,
 ) -> None:
     input_df = read_input_csv(input_path)
     output_df = apply_model(
         input_df,
         model_name,
-        handle_outliers,
     )
     write_output_csv(output_df, output_path)
 
@@ -97,7 +93,6 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["linear", "ridge", "random_forest", "xgboost"],
         help="Model name to load",
     )
-    parser.add_argument("--handle-outliers", action="store_true", default=False)
     return parser
 
 
@@ -110,7 +105,6 @@ def main() -> int:
             args.input,
             args.output,
             args.model,
-            args.handle_outliers,
         )
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)

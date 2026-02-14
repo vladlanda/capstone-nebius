@@ -1207,8 +1207,7 @@ def preprocess_v2(df, args, keep_city=False, fitted_params=None):
         df = engineer_features(df)
 
     # Handle outliers
-    if args.handle_outliers:
-        df = handle_outliers(df)
+    df = handle_outliers(df)
 
     # Prepare final dataset
     df = prepare_final_dataset(df, keep_city=keep_city)
@@ -1235,8 +1234,6 @@ if __name__ == '__main__':
                         help="Use KNN imputation for missing prices")
     parser.add_argument("--feature-engineering", action='store_true', default=False,
                         help="Create engineered features")
-    parser.add_argument("--handle-outliers", action='store_true', default=False,
-                        help="Handle outliers in numeric columns")
 
     # LLM workflows (separate from main preprocessing)
     parser.add_argument("--llm-sentiment-analysis", action='store_true', default=False,
@@ -1287,7 +1284,6 @@ if __name__ == '__main__':
 #   --neighborhood-extraction `
 #   --knn-impute-price `
 #   --feature-engineering `
-#   --handle-outliers `
 #   --split-strategy city `
 #   --train-city "Los Angeles" `
 #   --seed 42

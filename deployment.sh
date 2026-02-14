@@ -67,7 +67,7 @@ ExecStart=${APP_DIR}/.venv/bin/python -m streamlit run ${APP_FILE} \
   --server.address 0.0.0.0 \
   --server.port ${STREAMLIT_PORT} \
   --server.maxUploadSize ${SERVER_MAX_UPLOAD_FILE_MB} \
-  -- --model xgboost --handle-outliers
+  -- --model xgboost
 
 Restart=always
 RestartSec=3

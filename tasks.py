@@ -54,14 +54,14 @@ def train_catboost_optuna(c):
 @task
 def preprocess(c):
     cmd = (
-        f'python preprocess.py --drop-duplicate-rows --handle-outliers'
+        f'python preprocess.py --drop-duplicate-rows'
     )
     c.run(cmd,pty=True)
 
 @task
 def server(c):
     cmd = (
-        f'streamlit run server.py -- --model xgboost --handle-outliers'
+        f'streamlit run server.py -- --model xgboost'
     )
     c.run(cmd,pty=True)
 
@@ -75,7 +75,6 @@ def preprocess_mixture_of_experts(c):
         '--neighborhood-extraction '
         '--knn-impute-price '
         '--feature-engineering '
-        '--handle-outliers '
         '--split-strategy random '
         '--test-ratio 0.15 '
         '--val-ratio 0.15 '
