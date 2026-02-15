@@ -9,6 +9,7 @@ import random
 
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
+from tqdm.asyncio import tqdm as tqdm_async
 
 from config import config
 import dotenv
@@ -97,54 +98,55 @@ async def _get_neighborhood_tags_async(
         return []
     api_key = os.getenv("NEBIUS_API_KEY")
     assert api_key, "NEBIUS_API_KEY is not set in environment variables"
-    client = AsyncOpenAI(
+    async with AsyncOpenAI(
         api_key=api_key,
         base_url=config.NEBIUS_BASE_URL,
-    )
-    concurrent_requests = getattr(config, "CONCURRENT_REQUESTS", 10)
-    semaphore = asyncio.Semaphore(concurrent_requests)
+    ) as client:
+        concurrent_requests = 100
+        semaphore = asyncio.Semaphore(concurrent_requests)
 
-    async def score_one(overview: str) -> NeighborhoodTags:
-        user_prompt = build_user_prompt(overview)
+        async def score_one(overview: str) -> NeighborhoodTags:
+            user_prompt = build_user_prompt(overview)
 
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ]
+            messages = [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ]
 
-        max_attempts = 5
-        query_hash = hashlib.sha256(overview.encode("utf-8")).hexdigest()
-        for attempt in range(max_attempts):
-            try:
-                response = await client.chat.completions.parse(
-                    model=config.NEBIUS_MODEL,
-                    messages=messages,
-                    response_format=NeighborhoodTags,
-                )
-                return response.choices[0].message.parsed
-            except Exception:
-                logger.warning(
-                    "Neighborhood tag request failed. query_hash=%s attempt=%d/%d",
-                    query_hash,
-                    attempt + 1,
-                    max_attempts,
-                )
-                await asyncio.sleep((2 ** attempt) + random.random())
+            max_attempts = 5
+            query_hash = hashlib.sha256(overview.encode("utf-8")).hexdigest()
+            for attempt in range(max_attempts):
+                try:
+                    response = await client.chat.completions.parse(
+                        model=config.NEBIUS_MODEL,
+                        messages=messages,
+                        response_format=NeighborhoodTags,
+                    )
+                    return response.choices[0].message.parsed
+                except Exception:
+                    logger.warning(
+                        "Neighborhood tag request failed. query_hash=%s attempt=%d/%d",
+                        query_hash,
+                        attempt + 1,
+                        max_attempts,
+                    )
+                    await asyncio.sleep((2 ** attempt) + random.random())
+            raise RuntimeError(f"Failed to get neighborhood tags after {max_attempts} attempts. query_hash={query_hash}")
 
-        return NeighborhoodTags(
-            central=0.5,
-            many_stores=0.5,
-            crowded=0.5,
-            noisy=0.5,
-            quiet=0.5,
-        )
+            # return NeighborhoodTags(
+            #     central=0.5,
+            #     many_stores=0.5,
+            #     crowded=0.5,
+            #     noisy=0.5,
+            #     quiet=0.5,
+            # )
 
-    async def sem_task(overview: str) -> NeighborhoodTags:
-        async with semaphore:
-            return await score_one(overview)
+        async def sem_task(overview: str) -> NeighborhoodTags:
+            async with semaphore:
+                return await score_one(overview)
 
-    tasks = [asyncio.create_task(sem_task(overview)) for overview in neighborhood_overviews]
-    return await asyncio.gather(*tasks)
+        tasks = [asyncio.create_task(sem_task(overview)) for overview in neighborhood_overviews]
+        return await tqdm_async.gather(*tasks, desc="LLM neighborhood tags")
 
 
 def _run_async(coro):
@@ -154,7 +156,7 @@ def _run_async(coro):
         loop = None
 
     if loop and loop.is_running():
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
             future = executor.submit(asyncio.run, coro)
             return future.result()
 
