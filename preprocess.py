@@ -32,7 +32,7 @@ def load_raw_data(raw_data_path):
     #     logging.info(f"Error: Could not find input files in {raw_data_path}")
     #     raise
 
-    csv_files = glob(os.path.join(raw_data_path,'*.csv'))
+    csv_files = sorted(glob(os.path.join(raw_data_path, '*.csv')))
     dfs = [pd.read_csv(csv) for csv in csv_files]
 
 
@@ -564,6 +564,9 @@ def preprocess_v2_wrapper(args):
     save_data(y_test,  args.version_name, 'y_test',  args.processed_data_path)
 
 def preprocess_v2(df,args):
+    seed = getattr(args, "seed", config.RANDOM_SEED)
+    np.random.seed(seed)
+    random.seed(seed)
 
     # Remove duplicates
     if 'drop_duplicate_rows' in args and args.drop_duplicate_rows:
