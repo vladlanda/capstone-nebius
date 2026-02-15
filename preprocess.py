@@ -630,7 +630,7 @@ def preprocess_v2(df,args):
     df = convert_numeric_columns(df)
     df = encode_list_columns(df)
     df = encode_categorical_columns(df)
-    df = add_neighborhood_tags(df)
+    # df = add_neighborhood_tags(df)
 
     # Handle outliers
     df = handle_outliers(df)
