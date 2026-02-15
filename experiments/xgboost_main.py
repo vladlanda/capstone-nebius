@@ -40,35 +40,35 @@ def clean_and_feature_engineer(df):
     """
     # 1. Target Cleaning
     df = df.dropna(subset=['review_scores_rating']).copy()
-    
+
     # 2. Temporal Features
     date_cols = ['host_since', 'first_review', 'last_review', 'last_scraped']
     for col in date_cols:
         df[col] = pd.to_datetime(df[col], errors='coerce')
-    
+
     df['host_tenure_days'] = (df['last_scraped'] - df['host_since']).dt.days
     df['listing_age_days'] = (df['last_scraped'] - df['first_review']).dt.days
     df['days_since_last_review'] = (df['last_scraped'] - df['last_review']).dt.days
-    
+
     # 3. Numeric Cleaning
     if df['price'].dtype == 'object':
         df['price'] = df['price'].str.replace('$', '').str.replace(',', '').astype(float)
-    
+
     for col in ['host_response_rate', 'host_acceptance_rate']:
         if df[col].dtype == 'object':
             df[col] = df[col].str.replace('%', '').astype(float)
-            
+
     # 4. Property Ratios
     df['beds_per_bedroom'] = df['beds'] / (df['bedrooms'].replace(0, 1))
     df['accommodates_per_bedroom'] = df['accommodates'] / (df['bedrooms'].replace(0, 1))
-    
+
     # 5. Amenity Engineering
     premium_amenities = ['dishwasher', 'washer', 'dryer', 'private entrance', 'coffee maker', 'balcony']
     df['amenities'] = df['amenities'].str.lower()
     df['premium_amenity_count'] = 0
     for amenity in premium_amenities:
         df['premium_amenity_count'] += df['amenities'].str.contains(amenity).fillna(False).astype(int)
-    
+
     df['total_amenity_count'] = df['amenities'].str.count(',').fillna(0) + 1
 
     # 6. Feature Selection
@@ -77,21 +77,21 @@ def clean_and_feature_engineer(df):
         'accommodates', 'bedrooms', 'beds', 'price', 'minimum_nights',
         'host_response_rate', 'host_acceptance_rate', 'instant_bookable',
         'host_tenure_days', 'listing_age_days', 'days_since_last_review',
-        'beds_per_bedroom', 'accommodates_per_bedroom', 
+        'beds_per_bedroom', 'accommodates_per_bedroom',
         'premium_amenity_count', 'total_amenity_count'
     ]
-    
+
     # Add sentiment scores if they exist in the dataframe
     sentiment_cols = [c for c in df.columns if '_llm_score' in c]
     cols_to_keep.extend(sentiment_cols)
-    
+
     bool_cols = ['host_is_superhost', 'instant_bookable']
     for col in bool_cols:
         df[col] = df[col].map({'t': 1, 'f': 0}).fillna(0).astype(int)
-        
+
     X = df[cols_to_keep].fillna(0)
     y = df['review_scores_rating']
-    
+
     return X, y
 
 def prepare_data_for_xgboost(input_csv):
@@ -99,16 +99,16 @@ def prepare_data_for_xgboost(input_csv):
     df = convert_numeric_columns(df)
     X, y = clean_and_feature_engineer(df)
     # print(df.head())
-    X = X[['description_llm_score'	,'host_about_llm_score'	,'neighborhood_overview_llm_score']]
-    
+    X = X[['description_llm_score', 'host_about_llm_score', 'neighborhood_overview_llm_score']]
+
     X_train_raw, X_test_raw, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
-    
+
     scaler = StandardScaler()
     X_train = pd.DataFrame(scaler.fit_transform(X_train_raw), columns=X.columns)
     X_test = pd.DataFrame(scaler.transform(X_test_raw), columns=X.columns)
-    
+
     return X_train, X_test, y_train, y_test
 
 def load_credentials():
@@ -158,7 +158,7 @@ def get_sweep_config():
 
 def create_plots(y_true, y_pred, feature_names, booster):
     plots = {}
-    
+
     # 1. Residual Plot
     plt.figure(figsize=(10, 6))
     residuals = y_true.values.flatten() - y_pred.flatten()
@@ -173,22 +173,22 @@ def create_plots(y_true, y_pred, feature_names, booster):
     # 2. Actual vs Predicted Plot (R2 Visualization)
     plt.figure(figsize=(10, 6))
     plt.scatter(y_true, y_pred, alpha=0.5, color='teal')
-    
+
     # Calculate R2 for the plot title
     r2 = r2_score(y_true, y_pred)
-    
+
     # Add diagonal reference line
     min_val = min(y_true.min(), y_pred.min())
     max_val = max(y_true.max(), y_pred.max())
     plt.plot([min_val, max_val], [min_val, max_val], color='red', linestyle='--', label='Ideal')
-    
+
     plt.xlabel('Actual Values')
     plt.ylabel('Predicted Values')
     plt.title(f'Actual vs Predicted (R²: {r2:.4f})')
     plt.legend()
     plots["predicted_vs_actual_plot"] = wandb.Image(plt)
     plt.close()
-    
+
     return plots
 
 def train():
@@ -196,15 +196,15 @@ def train():
 
     with wandb.init() as run:
         config = run.config
-        
+
         # 1. Random Feature Selection
         all_features = list(X_train_all.columns)
         num_to_select = max(1, int(len(all_features) * config.feature_fraction))
         rng = random.Random(run.id)
         selected_features = rng.sample(all_features, num_to_select)
-        
+
         run.config.update({"selected_features": selected_features})
-        
+
         # 2. Run Name
         run.name = f"reg_d{config.max_depth}_lr{config.learning_rate:.3f}_f{config.feature_fraction:.2f}"
 
@@ -226,7 +226,7 @@ def train():
             "alpha": config.reg_alpha,
             "lambda": config.reg_lambda,
             "tree_method": "hist",
-            "eval_metric": "rmse", 
+            "eval_metric": "rmse",
             "random_state": 42
         }
 
@@ -241,7 +241,7 @@ def train():
         )
 
         y_test_pred = booster.predict(dtest)
-        
+
         rmse = np.sqrt(mean_squared_error(y_test_orig, y_test_pred))
         mae = mean_absolute_error(y_test_orig, y_test_pred)
         r2 = r2_score(y_test_orig, y_test_pred)
@@ -259,8 +259,8 @@ def train():
 if __name__ == "__main__":
     settings = load_credentials()
     sweep_config = get_sweep_config()
-    
+
     X_train_all, X_test_all, X_val_all, y_train, y_val, y_test_orig = load_data('./data/raw_llm/')
-    
+
     sweep_id = wandb.sweep(sweep_config, project=settings["project"], entity=settings["entity"])
     wandb.agent(sweep_id, function=train, count=40)
