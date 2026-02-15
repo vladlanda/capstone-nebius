@@ -59,6 +59,13 @@ def preprocess(c):
     c.run(cmd,pty=True)
 
 @task
+def preprocess_small(c):
+    cmd = (
+        f'python preprocess.py --drop-duplicate-rows --small-dataset'
+    )
+    c.run(cmd, pty=True)
+
+@task
 def server(c):
     cmd = (
         f'streamlit run server.py'
@@ -105,6 +112,13 @@ def train_mixture_of_experts(c):
 #         'invoke preprocess '
 #         'invoke train_xgboost '
 #         'invoke server'
+
+@task
+def train_small(c):
+    cmd = (
+        f'python train.py --small-dataset'
+    )
+    c.run(cmd, pty=True)
 #     )
 #     c.run(cmd,pty=True)
 
@@ -115,6 +129,16 @@ def predict(c):
         'python predict.py '
         '--input data/raw_city3/airbnb_city3_x.csv '
         '--output /tmp/city3_pred.csv'
+    )
+    c.run(cmd, pty=True)
+
+@task
+def predict_small(c):
+    cmd = (
+        'python predict.py '
+        '--input data/raw_city3/airbnb_city3_x.csv '
+        '--output /tmp/city3_pred.csv '
+        '--small-dataset'
     )
     c.run(cmd, pty=True)
 
@@ -129,6 +153,17 @@ def evaluate(c):
     )
     c.run(cmd, pty=True)
 
+@task
+def evaluate_small(c):
+    cmd = (
+        'python evaluate.py '
+        '--pred /tmp/city3_pred.csv '
+        '--gt data/raw_city3/airbnb_city3_y.csv '
+        '--name city3 '
+        '--small-dataset'
+    )
+    c.run(cmd, pty=True)
+
 
 @task
 def predict_on_test(c):
@@ -136,6 +171,16 @@ def predict_on_test(c):
         'python predict.py '
         '--input /Users/almaz/nebius_academy/capstone/capstone-nebius/data/processed/v1_X_test.csv '
         '--output /tmp/test_pred.csv'
+    )
+    c.run(cmd, pty=True)
+
+@task
+def predict_on_test_small(c):
+    cmd = (
+        'python predict.py '
+        '--input /Users/almaz/nebius_academy/capstone/capstone-nebius/data/processed/v1_X_test.csv '
+        '--output /tmp/test_pred.csv '
+        '--small-dataset'
     )
     c.run(cmd, pty=True)
 
@@ -147,5 +192,16 @@ def evaluate_on_test(c):
         '--pred /tmp/test_pred.csv '
         '--gt /Users/almaz/nebius_academy/capstone/capstone-nebius/data/processed/v1_y_test.csv '
         '--name test_set'
+    )
+    c.run(cmd, pty=True)
+
+@task
+def evaluate_on_test_small(c):
+    cmd = (
+        'python evaluate.py '
+        '--pred /tmp/test_pred.csv '
+        '--gt /Users/almaz/nebius_academy/capstone/capstone-nebius/data/processed/v1_y_test.csv '
+        '--name test_set '
+        '--small-dataset'
     )
     c.run(cmd, pty=True)

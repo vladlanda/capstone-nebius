@@ -1,6 +1,7 @@
 import argparse
 import pandas as pd
 import joblib
+import numpy as np
 from pathlib import Path
 from config import config
 from predict import predict_df
@@ -44,9 +45,23 @@ def train(
     model_name="catboost",
     version_name=config.VERSION_NAME,
     use_optuna=False,
+    small_dataset=False,
 ):
 
     X_train, X_test, y_train, y_test = get_data()
+
+    if small_dataset:
+        if len(X_train) < 200 or len(X_test) < 200:
+            raise ValueError(
+                "Small dataset requires at least 200 rows in train and test sets"
+            )
+        rng = np.random.RandomState(config.RANDOM_SEED)
+        train_idx = np.sort(rng.choice(len(X_train), size=200, replace=False))
+        test_idx = np.sort(rng.choice(len(X_test), size=200, replace=False))
+        X_train = X_train.iloc[train_idx].copy()
+        y_train = y_train.iloc[train_idx].copy()
+        X_test = X_test.iloc[test_idx].copy()
+        y_test = y_test.iloc[test_idx].copy()
 
     save_schema(X_train, version_name, model_name)
 
@@ -83,6 +98,7 @@ def parse_args():
     parser.add_argument(
         "--optuna", action="store_true", help="Enable Optuna tuning for CatBoost"
     )
+    parser.add_argument("--small-dataset", action="store_true", default=False)
 
     return parser.parse_args()
 
@@ -93,7 +109,8 @@ def main():
     train(
         model_name="catboost",
         version_name=args.version_name,
-        use_optuna=args.optuna
+        use_optuna=args.optuna,
+        small_dataset=args.small_dataset,
     )
 
 

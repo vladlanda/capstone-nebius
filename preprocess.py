@@ -63,6 +63,8 @@ def impute_missing_values(df):
     """Handle missing values through imputation and dropping."""
     # Random sampling imputation for host features
     for col in ['host_response_rate', 'host_response_time', 'host_acceptance_rate']:
+        if col not in df.columns:
+            continue
         mask = df[col].isna()
         if mask.sum() > 0:
             df.loc[mask, col] = np.random.choice(
@@ -76,11 +78,12 @@ def impute_missing_values(df):
     # df = df.dropna(subset=['first_review', 'last_review'], how='any')
 
     # Extract bathrooms from bathrooms_text
-    bathrooms_extracted = (df["bathrooms_text"]
-        .str.extract(r"(\d+\.?\d*)")
-        .astype(float)[0])
-    df.loc[:,"bathrooms"] = df.loc[:,"bathrooms"].fillna(bathrooms_extracted)
-    df = df.drop('bathrooms_text', axis=1)
+    if "bathrooms_text" in df.columns:
+        bathrooms_extracted = (df["bathrooms_text"]
+            .str.extract(r"(\d+\.?\d*)")
+            .astype(float)[0])
+        df.loc[:, "bathrooms"] = df.loc[:, "bathrooms"].fillna(bathrooms_extracted)
+        df = df.drop('bathrooms_text', axis=1)
 
     logging.info(f"After handling missing values: {df.shape}")
     return df
@@ -92,6 +95,8 @@ def convert_date_columns(df):
     reference_date = pd.to_datetime('2024-01-01')
 
     for col in date_cols:
+        if col not in df.columns:
+            continue
         df[col] = pd.to_datetime(df[col])
         df[f'{col}_days_since'] = (df[col] - reference_date).dt.days
         df = df.drop(col, axis=1)
@@ -103,6 +108,8 @@ def convert_boolean_columns(df):
     """Convert boolean columns from 't'/'f' to numeric."""
     bool_cols = ['host_is_superhost', 'host_has_profile_pic', 'instant_bookable']
     for col in bool_cols:
+        if col not in df.columns:
+            continue
         df[col] = df[col].map({'t': True, 'f': False}).astype(float)
     return df
 
@@ -115,7 +122,8 @@ def convert_ordinal_columns(df):
         'within a day': 2,
         'a few days or more': 3
     }
-    df['host_response_time'] = df['host_response_time'].map(response_time_order).astype(float)
+    if 'host_response_time' in df.columns:
+        df['host_response_time'] = df['host_response_time'].map(response_time_order).astype(float)
     return df
 
 
@@ -130,6 +138,8 @@ def convert_numeric_columns(df):
     ]
 
     for col in numeric_cols:
+        if col not in df.columns:
+            continue
         if col in ['host_response_rate', 'host_acceptance_rate']:
             # Remove %, $ and commas, then convert to float and divide by 100
             df[col] = (
@@ -172,38 +182,42 @@ def encode_list_columns(df):
 
     # Parse list columns
     for col in list_cols:
+        if col not in df.columns:
+            continue
         df[col] = df[col].apply(parse_list)
 
     # Encode host_verifications
-    mlb = MultiLabelBinarizer(sparse_output=True)
-    sparse_matrix = mlb.fit_transform(df['host_verifications'])
-    dummies = pd.DataFrame.sparse.from_spmatrix(
-        sparse_matrix,
-        columns=[f"host_verifications_{c}" for c in mlb.classes_],
-        index=df.index
-    )
-    df = df.drop(columns=['host_verifications'])
-    df = pd.concat([df, dummies], axis=1)
+    if 'host_verifications' in df.columns:
+        mlb = MultiLabelBinarizer(sparse_output=True)
+        sparse_matrix = mlb.fit_transform(df['host_verifications'])
+        dummies = pd.DataFrame.sparse.from_spmatrix(
+            sparse_matrix,
+            columns=[f"host_verifications_{c}" for c in mlb.classes_],
+            index=df.index
+        )
+        df = df.drop(columns=['host_verifications'])
+        df = pd.concat([df, dummies], axis=1)
 
     # Encode amenities (keep only top 50)
-    all_amenities = [item for sublist in df['amenities'] for item in sublist]
-    amenity_counts = Counter(all_amenities)
-    top_50_amenities = set([amenity for amenity, count in amenity_counts.most_common(50)])
+    if 'amenities' in df.columns:
+        all_amenities = [item for sublist in df['amenities'] for item in sublist]
+        amenity_counts = Counter(all_amenities)
+        top_50_amenities = set([amenity for amenity, count in amenity_counts.most_common(50)])
 
-    df['amenities_filtered'] = df['amenities'].apply(
-        lambda x: [item for item in x if item in top_50_amenities]
-    )
+        df['amenities_filtered'] = df['amenities'].apply(
+            lambda x: [item for item in x if item in top_50_amenities]
+        )
 
-    mlb = MultiLabelBinarizer(sparse_output=True)
-    sparse_matrix = mlb.fit_transform(df['amenities_filtered'])
-    dummies = pd.DataFrame.sparse.from_spmatrix(
-        sparse_matrix,
-        columns=[f"amenities_{c}" for c in mlb.classes_],
-        index=df.index
-    )
+        mlb = MultiLabelBinarizer(sparse_output=True)
+        sparse_matrix = mlb.fit_transform(df['amenities_filtered'])
+        dummies = pd.DataFrame.sparse.from_spmatrix(
+            sparse_matrix,
+            columns=[f"amenities_{c}" for c in mlb.classes_],
+            index=df.index
+        )
 
-    df = df.drop(columns=['amenities', 'amenities_filtered'])
-    df = pd.concat([df, dummies], axis=1)
+        df = df.drop(columns=['amenities', 'amenities_filtered'])
+        df = pd.concat([df, dummies], axis=1)
 
     return df
 
@@ -211,13 +225,15 @@ def encode_categorical_columns(df):
 
     """One-hot encode categorical columns."""
     # Group rare property types into "Other"
-    property_counts = df['property_type'].value_counts()
-    rare_properties = property_counts[property_counts < 1000].index
-    df['property_type'] = df['property_type'].replace(rare_properties, 'Other')
+    if 'property_type' in df.columns:
+        property_counts = df['property_type'].value_counts()
+        rare_properties = property_counts[property_counts < 1000].index
+        df['property_type'] = df['property_type'].replace(rare_properties, 'Other')
 
     # One-hot encode
-    categorical_cols = ['property_type', 'room_type']
-    df = pd.get_dummies(df, columns=categorical_cols, drop_first=True, sparse=False, dtype=int)
+    categorical_cols = [c for c in ['property_type', 'room_type'] if c in df.columns]
+    if categorical_cols:
+        df = pd.get_dummies(df, columns=categorical_cols, drop_first=True, sparse=False, dtype=int)
 
     return df
 
@@ -228,6 +244,8 @@ def handle_outliers(df):
         'minimum_maximum_nights', 'maximum_maximum_nights', 'minimum_nights_avg_ntm', 'maximum_nights_avg_ntm'
     ]
     for col in nights_cols:
+        if col not in df.columns:
+            continue
         df.loc[df[col] > 365, col] = np.nan
     return df
 
@@ -534,11 +552,23 @@ def preprocess_v2_wrapper(args):
     df = load_raw_data(args.raw_data_path)
     df = df.dropna(subset=['review_scores_rating'])
 
-    train_df, test_df = train_test_split(
-        df,
-        test_size=args.split_ratio,
-        random_state=args.seed
-    )
+    if args.small_dataset:
+        if len(df) < 400:
+            raise ValueError(
+                f"Small dataset requires at least 400 rows, found {len(df)}"
+            )
+        rng = np.random.RandomState(args.seed)
+        selected_idx = rng.choice(len(df), size=400, replace=False)
+        selected_idx = np.sort(selected_idx)
+        df_small = df.iloc[selected_idx].copy()
+        train_df = df_small.iloc[:200].copy()
+        test_df = df_small.iloc[200:400].copy()
+    else:
+        train_df, test_df = train_test_split(
+            df,
+            test_size=args.split_ratio,
+            random_state=args.seed
+        )
 
     train_df = preprocess_v2(train_df, args)
     test_df  = preprocess_v2(test_df, args)
@@ -605,6 +635,7 @@ if __name__ == '__main__':
     parser.add_argument("--split-ratio", type=float, default=config.TEST_SIZE)
     parser.add_argument("--seed", type=int, default=config.RANDOM_SEED)
     parser.add_argument("--processed_data_path", type=str, default=config.PROCESSED_DATA_PATH)
+    parser.add_argument("--small-dataset", action='store_true', default=False)
 
     args = parser.parse_args()
     logging.info(f"Args : {sys.argv}")

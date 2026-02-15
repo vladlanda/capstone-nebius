@@ -54,6 +54,7 @@ def apply_model(
 ) -> pd.DataFrame:
     preprocess_args = argparse.Namespace(
         model=model_name,
+        seed=config.RANDOM_SEED,
     )
     processed_df = preprocess.preprocess_v2(input_df.copy(), preprocess_args)
     if processed_df is None:
@@ -78,8 +79,17 @@ def run_prediction(
     input_path: str,
     output_path: str,
     model_name: str,
+    small_dataset: bool,
 ) -> None:
     input_df = read_input_csv(input_path)
+    if small_dataset:
+        if len(input_df) < 200:
+            raise ValueError(
+                f"Small dataset requires at least 200 rows, found {len(input_df)}"
+            )
+        rng = np.random.RandomState(config.RANDOM_SEED)
+        selected_idx = np.sort(rng.choice(len(input_df), size=200, replace=False))
+        input_df = input_df.iloc[selected_idx].copy()
     output_df = apply_model(
         input_df,
         model_name,
@@ -93,6 +103,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--input", required=True, help="Input CSV path")
     parser.add_argument("--output", required=True, help="Output CSV path")
+    parser.add_argument("--small-dataset", action="store_true", default=False)
     return parser
 
 
@@ -105,6 +116,7 @@ def main() -> int:
             args.input,
             args.output,
             "catboost",
+            args.small_dataset,
         )
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
