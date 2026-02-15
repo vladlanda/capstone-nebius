@@ -30,3 +30,4 @@ catboost
 openai
 streamlit
 watchdog
+nbformat>=4.2.0
