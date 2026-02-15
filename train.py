@@ -46,9 +46,13 @@ def train(
     version_name=config.VERSION_NAME,
     use_optuna=False,
     small_dataset=False,
+    medium_dataset=False,
 ):
 
     X_train, X_test, y_train, y_test = get_data()
+
+    if small_dataset and medium_dataset:
+        raise ValueError("Use only one of --small-dataset or --medium-dataset")
 
     if small_dataset:
         if len(X_train) < 200 or len(X_test) < 200:
@@ -58,6 +62,18 @@ def train(
         rng = np.random.RandomState(config.RANDOM_SEED)
         train_idx = np.sort(rng.choice(len(X_train), size=200, replace=False))
         test_idx = np.sort(rng.choice(len(X_test), size=200, replace=False))
+        X_train = X_train.iloc[train_idx].copy()
+        y_train = y_train.iloc[train_idx].copy()
+        X_test = X_test.iloc[test_idx].copy()
+        y_test = y_test.iloc[test_idx].copy()
+    elif medium_dataset:
+        if len(X_train) < 4000 or len(X_test) < 4000:
+            raise ValueError(
+                "Medium dataset requires at least 4000 rows in train and test sets"
+            )
+        rng = np.random.RandomState(config.RANDOM_SEED)
+        train_idx = np.sort(rng.choice(len(X_train), size=4000, replace=False))
+        test_idx = np.sort(rng.choice(len(X_test), size=4000, replace=False))
         X_train = X_train.iloc[train_idx].copy()
         y_train = y_train.iloc[train_idx].copy()
         X_test = X_test.iloc[test_idx].copy()
@@ -99,6 +115,7 @@ def parse_args():
         "--optuna", action="store_true", help="Enable Optuna tuning for CatBoost"
     )
     parser.add_argument("--small-dataset", action="store_true", default=False)
+    parser.add_argument("--medium-dataset", action="store_true", default=False)
 
     return parser.parse_args()
 
@@ -111,6 +128,7 @@ def main():
         version_name=args.version_name,
         use_optuna=args.optuna,
         small_dataset=args.small_dataset,
+        medium_dataset=args.medium_dataset,
     )
 
 

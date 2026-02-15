@@ -552,6 +552,9 @@ def preprocess_v2_wrapper(args):
     df = load_raw_data(args.raw_data_path)
     df = df.dropna(subset=['review_scores_rating'])
 
+    if args.small_dataset and args.medium_dataset:
+        raise ValueError("Use only one of --small-dataset or --medium-dataset")
+
     if args.small_dataset:
         if len(df) < 400:
             raise ValueError(
@@ -563,6 +566,17 @@ def preprocess_v2_wrapper(args):
         df_small = df.iloc[selected_idx].copy()
         train_df = df_small.iloc[:200].copy()
         test_df = df_small.iloc[200:400].copy()
+    elif args.medium_dataset:
+        if len(df) < 8000:
+            raise ValueError(
+                f"Medium dataset requires at least 8000 rows, found {len(df)}"
+            )
+        rng = np.random.RandomState(args.seed)
+        selected_idx = rng.choice(len(df), size=8000, replace=False)
+        selected_idx = np.sort(selected_idx)
+        df_medium = df.iloc[selected_idx].copy()
+        train_df = df_medium.iloc[:4000].copy()
+        test_df = df_medium.iloc[4000:8000].copy()
     else:
         train_df, test_df = train_test_split(
             df,
@@ -636,6 +650,7 @@ if __name__ == '__main__':
     parser.add_argument("--seed", type=int, default=config.RANDOM_SEED)
     parser.add_argument("--processed_data_path", type=str, default=config.PROCESSED_DATA_PATH)
     parser.add_argument("--small-dataset", action='store_true', default=False)
+    parser.add_argument("--medium-dataset", action='store_true', default=False)
 
     args = parser.parse_args()
     logging.info(f"Args : {sys.argv}")

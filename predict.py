@@ -80,8 +80,11 @@ def run_prediction(
     output_path: str,
     model_name: str,
     small_dataset: bool,
+    medium_dataset: bool,
 ) -> None:
     input_df = read_input_csv(input_path)
+    if small_dataset and medium_dataset:
+        raise ValueError("Use only one of --small-dataset or --medium-dataset")
     if small_dataset:
         if len(input_df) < 200:
             raise ValueError(
@@ -89,6 +92,14 @@ def run_prediction(
             )
         rng = np.random.RandomState(config.RANDOM_SEED)
         selected_idx = np.sort(rng.choice(len(input_df), size=200, replace=False))
+        input_df = input_df.iloc[selected_idx].copy()
+    elif medium_dataset:
+        if len(input_df) < 4000:
+            raise ValueError(
+                f"Medium dataset requires at least 4000 rows, found {len(input_df)}"
+            )
+        rng = np.random.RandomState(config.RANDOM_SEED)
+        selected_idx = np.sort(rng.choice(len(input_df), size=4000, replace=False))
         input_df = input_df.iloc[selected_idx].copy()
     output_df = apply_model(
         input_df,
@@ -104,6 +115,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--input", required=True, help="Input CSV path")
     parser.add_argument("--output", required=True, help="Output CSV path")
     parser.add_argument("--small-dataset", action="store_true", default=False)
+    parser.add_argument("--medium-dataset", action="store_true", default=False)
     return parser
 
 
@@ -117,6 +129,7 @@ def main() -> int:
             args.output,
             "catboost",
             args.small_dataset,
+            args.medium_dataset,
         )
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)

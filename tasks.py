@@ -66,6 +66,13 @@ def preprocess_small(c):
     c.run(cmd, pty=True)
 
 @task
+def preprocess_medium(c):
+    cmd = (
+        f'python preprocess.py --drop-duplicate-rows --medium-dataset'
+    )
+    c.run(cmd, pty=True)
+
+@task
 def server(c):
     cmd = (
         f'streamlit run server.py'
@@ -119,6 +126,13 @@ def train_small(c):
         f'python train.py --small-dataset'
     )
     c.run(cmd, pty=True)
+
+@task
+def train_medium(c):
+    cmd = (
+        f'python train.py --medium-dataset'
+    )
+    c.run(cmd, pty=True)
 #     )
 #     c.run(cmd,pty=True)
 
@@ -139,6 +153,16 @@ def predict_small(c):
         '--input data/raw_city3/airbnb_city3_x.csv '
         '--output /tmp/city3_pred.csv '
         '--small-dataset'
+    )
+    c.run(cmd, pty=True)
+
+@task
+def predict_medium(c):
+    cmd = (
+        'python predict.py '
+        '--input data/raw_city3/airbnb_city3_x.csv '
+        '--output /tmp/city3_pred.csv '
+        '--medium-dataset'
     )
     c.run(cmd, pty=True)
 
@@ -164,6 +188,17 @@ def evaluate_small(c):
     )
     c.run(cmd, pty=True)
 
+@task
+def evaluate_medium(c):
+    cmd = (
+        'python evaluate.py '
+        '--pred /tmp/city3_pred.csv '
+        '--gt data/raw_city3/airbnb_city3_y.csv '
+        '--name city3 '
+        '--medium-dataset'
+    )
+    c.run(cmd, pty=True)
+
 
 @task
 def predict_on_test(c):
@@ -181,6 +216,16 @@ def predict_on_test_small(c):
         '--input /Users/almaz/nebius_academy/capstone/capstone-nebius/data/processed/v1_X_test.csv '
         '--output /tmp/test_pred.csv '
         '--small-dataset'
+    )
+    c.run(cmd, pty=True)
+
+@task
+def predict_on_test_medium(c):
+    cmd = (
+        'python predict.py '
+        '--input /Users/almaz/nebius_academy/capstone/capstone-nebius/data/processed/v1_X_test.csv '
+        '--output /tmp/test_pred.csv '
+        '--medium-dataset'
     )
     c.run(cmd, pty=True)
 
@@ -203,5 +248,16 @@ def evaluate_on_test_small(c):
         '--gt /Users/almaz/nebius_academy/capstone/capstone-nebius/data/processed/v1_y_test.csv '
         '--name test_set '
         '--small-dataset'
+    )
+    c.run(cmd, pty=True)
+
+@task
+def evaluate_on_test_medium(c):
+    cmd = (
+        'python evaluate.py '
+        '--pred /tmp/test_pred.csv '
+        '--gt /Users/almaz/nebius_academy/capstone/capstone-nebius/data/processed/v1_y_test.csv '
+        '--name test_set '
+        '--medium-dataset'
     )
     c.run(cmd, pty=True)
