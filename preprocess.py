@@ -6,6 +6,7 @@ from collections import Counter
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.model_selection import train_test_split
 from config import config
+from preprocess_llm import add_neighborhood_tags
 from dotenv import load_dotenv
 import os
 from openai import OpenAI
@@ -629,6 +630,7 @@ def preprocess_v2(df,args):
     df = convert_numeric_columns(df)
     df = encode_list_columns(df)
     df = encode_categorical_columns(df)
+    # df = add_neighborhood_tags(df)
 
     # Handle outliers
     df = handle_outliers(df)
